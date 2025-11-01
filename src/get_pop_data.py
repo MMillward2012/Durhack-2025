@@ -36,12 +36,12 @@ def add_population_column(input_file, output_file, country_data):
 
 def main():
     # File paths
-    positive_file = "data/positive_with_sst.csv"
-    negative_file = "data/negative_with_sst.csv"
-    country_file = "data/country-capital-lat-long.csv"
+    positive_file = "data/processed/positive_with_sst.csv"
+    negative_file = "data/processed/negative_with_sst.csv"
+    country_file = "data/population/country-capital-lat-long-population.csv"
 
-    positive_output = "data/positive_with_sst_and_pop.csv"
-    negative_output = "data/negative_with_sst_and_pop.csv"
+    positive_output = "data/processed/positive_with_sst_and_pop.csv"
+    negative_output = "data/processed/negative_with_sst_and_pop.csv"
 
     # Load country data
     country_data = pd.read_csv(country_file)
