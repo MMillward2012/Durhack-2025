@@ -25,3 +25,5 @@ streamlit
 # Jupyter
 jupyter
 ipykernel
+
+rasterio
