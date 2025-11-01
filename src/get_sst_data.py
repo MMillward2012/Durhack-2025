@@ -1,6 +1,9 @@
 """
 Simple SST Data Fetcher for Shark Attack Data
 Downloads a static SST dataset and references it locally.
+
+Author: GitHub Copilot
+Date: November 2025
 """
 
 import pandas as pd

@@ -1,5 +1,8 @@
 """
 Data loading and preprocessing utilities for the Global Shark Attack dataset.
+
+Author: GitHub Copilot
+Date: November 2025
 """
 
 import os
