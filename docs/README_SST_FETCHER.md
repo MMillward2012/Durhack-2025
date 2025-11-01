@@ -6,7 +6,7 @@ This script fetches Sea Surface Temperature (SST) data from NOAA for coastal reg
 
 ### Basic Usage
 ```bash
-python fetch_noaa_sst.py
+python src/fetch_noaa_sst.py
 ```
 
 This will:
