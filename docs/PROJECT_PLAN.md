@@ -1,499 +1,295 @@
-# 🦈 Shark Attack Prediction Heatmap - Project Plan
-## Durham Hackathon 2025
+# 🦈 Shark Attack Risk Predictor - Implementation Checklist
+
+## Phase 1: Data Collection (Hours 0-6)
+
+### Shark Attack Data
+- [ ] Download Global Shark Attack File from ISAF/GSAF  
+- [ ] Filter to unprovoked attacks only  
+- [ ] Remove records with invalid/missing dates  
+- [ ] Remove records with unclear locations  
+- [ ] Geocode location names to lat/long  
+- [ ] Standardize date formats (YYYY-MM-DD)  
+- [ ] Save cleaned dataset as `shark_attacks_clean.csv`  
+- [ ] Verify: 3,000-5,000 quality records  
+
+### Ocean Temperature Data
+- [ ] Access NOAA ERDDAP or Copernicus Marine Service  
+- [ ] Define 50-100 prediction locations (lat/long)  
+- [ ] Download historical monthly SST for each location  
+- [ ] Calculate monthly averages (last 20 years)  
+- [ ] Create lookup table: `{(location_id, month): temperature}`  
+- [ ] Save as `temp_lookup.pkl` or `temp_lookup.json`  
+- [ ] Verify: temperatures in reasonable range (10-35°C)  
+
+### Migration Calendar
+- [ ] Research seal pupping seasons by region  
+- [ ] Research fish migration patterns by region  
+- [ ] Create binary calendar: `{region: {month: 0 or 1}}`  
+- [ ] Save as `migration_calendar.json`  
+- [ ] Regions: California, Florida, Australia, South Africa, Hawaii  
+
+### Tourism Patterns
+- [ ] Define tourism intensity by region and month  
+- [ ] Use hemisphere-based heuristics (summer = high)  
+- [ ] Create lookup: `{region: {month: 0.0-1.0}}`  
+- [ ] Save as `tourism_patterns.json`  
+
+### Define Prediction Grid
+- [ ] Create list of 50-100 coastal locations  
+- [ ] Include: name, lat, long, region, country  
+- [ ] Mix of famous beaches and shark hotspots  
+- [ ] Ensure geographic diversity  
+- [ ] Save as `prediction_locations.csv`  
 
 ---
 
-## 🎯 Project Goal
-**Predict shark attack risk zones using historical data and environmental factors to create an interactive heatmap.**
+## Phase 2: Data Processing (Hours 6-10)
 
-Build a predictive model that identifies high-risk areas and times for shark attacks based on:
-- Historical shark attack patterns (GSAF database)
-- Ocean conditions (temperature, currents)
-- Human activity levels (beach tourism, water sports)
-- Ecological factors (fish migration, prey availability)
-- Weather conditions (storms, visibility)
+### Feature Engineering for Historical Attacks
+- [ ] For each attack, extract month from date  
+- [ ] For each attack, look up ocean_temp from lookup table  
+- [ ] For each attack, check migration_active from calendar  
+- [ ] For each attack, look up tourism_level from patterns  
+- [ ] Calculate is_weekend, is_summer  
+- [ ] Calculate region_attack_frequency  
+- [ ] Calculate days_since_last_attack in region  
+- [ ] Label all with `attack = 1`  
+- [ ] Save as `positive_samples.csv`  
 
----
+### Generate Negative Samples
+- [ ] Randomly sample 5-10x locations from prediction grid  
+- [ ] Randomly sample dates from historical range  
+- [ ] Verify no attack occurred at location+date  
+- [ ] Extract same features as positive samples  
+- [ ] Label all with `attack = 0`  
+- [ ] Save as `negative_samples.csv`  
 
-## 💡 Why This is Novel & Impactful
+### Combine Training Data
+- [ ] Merge positive and negative samples  
+- [ ] Shuffle dataset  
+- [ ] Check class distribution (10-20% positive)  
+- [ ] Handle any missing values  
+- [ ] Save as `training_data.csv`  
+- [ ] Verify: 15,000-50,000 total rows  
 
-### Novelty
-- **Multi-factor prediction**: Most shark analysis is reactive; we're predicting future risk
-- **Geospatial ML**: Combining location data with temporal and environmental features
-- **Real-world utility**: Actually deployable for beach safety
-- **Data fusion**: Merging ecological, weather, tourism, and historical data
-
-### Impact
-- **Public Safety**: Reduce shark attack incidents through early warnings
-- **Tourism Management**: Help beach authorities allocate resources
-- **Conservation**: Better understanding of shark-human interaction patterns
-- **Evidence-based policy**: Data-driven coastal management decisions
-
----
-
-## 📊 Data Sources & Features
-
-### 1. **Historical Shark Attack Data (GSAF)**
-**Source**: Global Shark Attack File - https://www.sharkattackfile.net/
-- Attack locations (lat/long)
-- Date and time
-- Victim activity (surfing, swimming, diving, fishing)
-- Shark species (if identified)
-- Injury severity
-- Water conditions at time of attack
-
-### 2. **Ocean Temperature (SST - Sea Surface Temperature)**
-**Sources**: 
-- NOAA (https://www.ncei.noaa.gov/)
-- Copernicus Marine Service
-- OpenWeatherMap Ocean API
-
-**Features**:
-- Current SST by region
-- Temperature anomalies
-- Seasonal temperature patterns
-- Thermocline depth
-
-### 3. **Beach Tourism Data**
-**Sources**:
-- Local tourism boards
-- Google Popular Times API (for beaches)
-- Social media check-in data
-- Beach visitor statistics
-
-**Features**:
-- Daily/weekly visitor counts
-- Peak season vs off-season
-- Holiday periods
-- Local events
-
-### 4. **Fish Migration & Prey Availability**
-**Sources**:
-- FishBase (https://www.fishbase.org/)
-- Ocean Biogeographic Information System (OBIS)
-- Regional fisheries data
-
-**Features**:
-- Seasonal fish migrations
-- Baitfish abundance
-- Spawning seasons
-- Marine protected areas
-
-### 5. **Coastal Weather Conditions**
-**Sources**:
-- NOAA Weather API
-- OpenWeatherMap
-- Local meteorological services
-
-**Features**:
-- Wave height and conditions
-- Water visibility
-- Storm activity
-- Wind speed/direction
-- Tidal patterns
-
-### 6. **Victim Activity Classification**
-**From GSAF data**:
-- Surfing/bodyboarding
-- Swimming/wading
-- Diving/snorkeling
-- Fishing
-- Kayaking/paddleboarding
-- Standing in water
+### Train/Test Split
+- [ ] Split by time: train on pre-2020, test on 2020-2024  
+- [ ] Ensure no data leakage  
+- [ ] Save as `train.csv` and `test.csv`  
 
 ---
 
-## 🔬 Technical Approach
+## Phase 3: Model Training (Hours 10-14)
 
-### Phase 1: Data Collection & Preprocessing
-1. **Scrape/download GSAF data** (primary source)
-2. **Fetch ocean temperature data** (NOAA API)
-3. **Collect tourism statistics** (manual + APIs)
-4. **Get fish migration data** (databases)
-5. **Weather data collection** (APIs)
-6. **Geospatial data cleanup** (standardize coordinates)
+### Model Setup
+- [ ] Import scikit-learn RandomForestClassifier  
+- [ ] Define feature columns  
+- [ ] Load training data  
+- [ ] Separate X (features) and y (labels)  
 
-### Phase 2: Feature Engineering
-Create risk factors:
-- **Temporal features**: month, season, time of day, day of week
-- **Ocean features**: SST, temp anomaly, thermocline
-- **Activity risk scores**: historical attack rates by activity type
-- **Tourism density**: visitor count normalization
-- **Ecological features**: prey availability score
-- **Weather risk**: visibility, wave height, storm proximity
-- **Historical risk**: past attacks in region (spatial clustering)
+### Train Model
+- [ ] Initialize RandomForest(n_estimators=100-200)  
+- [ ] Consider class_weight='balanced'  
+- [ ] Fit model on training data  
+- [ ] Save trained model as `shark_model.pkl`  
 
-### Phase 3: Model Development
-**Approach**: Geospatial risk prediction
+### Model Evaluation
+- [ ] Load test data  
+- [ ] Generate predictions on test set  
+- [ ] Calculate accuracy, precision, recall  
+- [ ] Generate confusion matrix  
+- [ ] Calculate ROC-AUC score  
+- [ ] Document performance metrics  
 
-**Model Options**:
-1. **Grid-based Classification**:
-   - Divide coastal regions into grid cells
-   - Train classifier for "high risk" vs "low risk" per cell
-   - Models: Random Forest, XGBoost, Logistic Regression
-
-2. **Density-based Prediction**:
-   - Kernel Density Estimation (KDE) on historical attacks
-   - Weighted by environmental conditions
-   - Output: probability heatmap
-
-3. **Time-series Forecasting** (stretch):
-   - Predict risk levels for future dates
-   - LSTM or Prophet for temporal patterns
-
-**Target Variable**:
-- Binary: High risk (1) vs Low risk (0) per grid cell
-- Or continuous: Attack probability score (0-1)
-
-### Phase 4: Visualization
-**Interactive Heatmap**:
-- **Base map**: Folium or Plotly
-- **Heat layer**: Color-coded risk zones
-- **Interactive filters**: Date range, activity type, region
-- **Info popups**: Risk factors for each zone
-- **Time slider**: Show risk changes over seasons
-
-**Additional Visualizations**:
-- Attack frequency by month/season
-- Risk correlation with temperature
-- Activity-specific risk maps
-- Historical vs predicted overlays
+### Feature Importance Analysis
+- [ ] Extract feature_importances_ from model  
+- [ ] Rank features by importance  
+- [ ] Create visualization of top 10 features  
+- [ ] Save chart as `feature_importance.png`  
+- [ ] Document surprising findings  
 
 ---
 
-## 📅 24-Hour Development Timeline
+## Phase 4: Prediction System (Hours 14-18)
 
-### **Hour 0-3: Data Collection & Setup**
-**Goal**: Get all data sources loaded
+### Prediction Pipeline
+- [ ] Create function: extract_features(location, date)  
+- [ ] Function looks up temp from lookup table  
+- [ ] Function checks migration calendar  
+- [ ] Function gets tourism level  
+- [ ] Function calculates temporal features  
+- [ ] Create function: predict_risk(location, date)  
+- [ ] Function returns risk score 0-100  
 
-- [ ] Download GSAF dataset (CSV from website or Kaggle)
-- [ ] Sign up for NOAA API access
-- [ ] Sign up for OpenWeatherMap API (free tier)
-- [ ] Create data directory structure
-- [ ] Initial data exploration in Jupyter
-- [ ] Identify key coastal regions to focus on (e.g., Australia, California, Florida, South Africa)
+### Pre-compute Resources
+- [ ] Load all lookup tables into memory  
+- [ ] Test prediction speed (should be <100ms per location)  
+- [ ] Optimize if necessary  
 
-**Deliverable**: `data/raw/` folder with GSAF, SST samples, tourism estimates
-
----
-
-### **Hour 3-6: Data Cleaning & EDA**
-**Goal**: Understand patterns, clean data
-
-- [ ] Clean GSAF data (handle missing values, standardize locations)
-- [ ] Geocode any text-based locations to lat/long
-- [ ] Merge datasets by location and date
-- [ ] Exploratory visualizations:
-  - Attack frequency by region
-  - Seasonal patterns
-  - Activity type distribution
-  - Temperature correlation
-- [ ] Identify data quality issues
-
-**Deliverable**: `notebooks/EDA.ipynb` with insights
+### Validation
+- [ ] Test predictions on known high-risk scenarios  
+- [ ] Test predictions on known low-risk scenarios  
+- [ ] Verify seasonal patterns make sense  
+- [ ] Document any issues  
 
 ---
 
-### **Hour 6-10: Feature Engineering & Grid Creation**
-**Goal**: Build feature matrix for ML
+## Phase 5: Visualization (Hours 18-22)
 
-- [ ] Create coastal grid system (e.g., 0.5° x 0.5° cells)
-- [ ] Assign attacks to grid cells
-- [ ] Calculate features per grid cell:
-  - Historical attack count
-  - Average SST
-  - Tourism density estimate
-  - Prey availability score
-  - Weather risk factors
-- [ ] Create labeled dataset (high risk = cells with attacks)
-- [ ] Handle class imbalance (many cells have 0 attacks)
+### Frontend Setup
+- [ ] Choose framework (React recommended)  
+- [ ] Set up project structure  
+- [ ] Install dependencies (Plotly, mapping library)  
 
-**Deliverable**: `data/processed/feature_matrix.csv`
+### World Map Component
+- [ ] Create base world map  
+- [ ] Plot 50-100 prediction locations  
+- [ ] Color-code by risk level (green/yellow/red)  
+- [ ] Add hover tooltips with location names  
+- [ ] Scale marker size appropriately  
 
----
+### Date Slider Component
+- [ ] Create date range slider  
+- [ ] Set date range (e.g., 2024-2026)  
+- [ ] Display selected date clearly  
+- [ ] Connect to prediction update function  
 
-### **Hour 10-14: Model Training & Validation**
-**Goal**: Build predictive model
+### Risk Calculation Integration
+- [ ] On slider change, extract selected date  
+- [ ] For each location, call predict_risk(location, date)  
+- [ ] Update map colors based on new risk scores  
+- [ ] Ensure smooth performance (<1 second update)  
 
-- [ ] Split data: 70% train, 15% validation, 15% test
-- [ ] Train baseline model (Logistic Regression)
-- [ ] Train advanced models (Random Forest, XGBoost)
-- [ ] Hyperparameter tuning
-- [ ] Cross-validation
-- [ ] Evaluate metrics:
-  - Precision/Recall (important for safety!)
-  - ROC-AUC
-  - Confusion matrix
-- [ ] Feature importance analysis
-- [ ] Model interpretation
+### Location Detail Panel (Optional)
+- [ ] Add click handler to map markers  
+- [ ] Show popup with location details  
+- [ ] Display current risk score  
+- [ ] Show contributing factors:
+  - Ocean temperature  
+  - Migration season status  
+  - Tourism level  
+  - Historical attack frequency  
 
-**Deliverable**: `models/shark_risk_model.pkl`, performance report
+### Color Scale Legend
+- [ ] Add legend showing risk levels  
+- [ ] Green: 0-30 (Low)  
+- [ ] Yellow: 30-70 (Moderate)  
+- [ ] Red: 70-100 (High)  
 
----
-
-### **Hour 14-18: Heatmap Visualization**
-**Goal**: Create interactive map
-
-- [ ] Install/setup Folium or Plotly
-- [ ] Generate base coastal map
-- [ ] Overlay risk predictions as heatmap
-- [ ] Add interactive elements:
-  - Click on zone for details
-  - Filter by season/month
-  - Toggle different risk factors
-- [ ] Create static visualizations for presentation
-- [ ] Export high-quality images
-
-**Deliverable**: Interactive HTML map, static charts
+### Polish
+- [ ] Add loading states  
+- [ ] Add error handling  
+- [ ] Test on different screen sizes  
+- [ ] Optimize performance  
 
 ---
 
-### **Hour 18-22: Demo Application & Polish**
-**Goal**: Finalize presentation
+## Phase 6: Analysis & Insights (Throughout)
 
-- [ ] Build Streamlit demo app:
-  - Upload location
-  - Select date/season
-  - Choose activity type
-  - See risk prediction + heatmap
-- [ ] Add example case studies
-- [ ] Create presentation slides
-- [ ] Document methodology
-- [ ] Clean up code
-- [ ] Write clear README
+### Find Surprising Patterns
+- [ ] Analyze feature importance results  
+- [ ] Look for interaction effects (temp × migration)  
+- [ ] Compare different regions  
+- [ ] Examine temporal trends  
+- [ ] Check species-specific patterns (if data allows)  
 
-**Deliverable**: `app.py`, presentation slides
-
----
-
-### **Hour 22-24: Testing, Practice & Buffer**
-**Goal**: Ready for judging
-
-- [ ] Test demo end-to-end
-- [ ] Prepare 3-5 minute pitch
-- [ ] Practice presentation
-- [ ] Prepare for Q&A
-- [ ] Final GitHub push
-- [ ] Backup demo (screenshots/video)
-
-**Deliverable**: Polished demo, practiced pitch
+### Document Key Findings
+- [ ] Finding #1: (e.g., "Migration season increases risk 400%")  
+- [ ] Finding #2: (e.g., "Temperature threshold at 22°C")  
+- [ ] Finding #3: (e.g., "Morning attacks 3x more common")  
+- [ ] Create visualizations for each finding  
 
 ---
 
-## 🛠️ Tech Stack Details
+## Phase 7: Presentation (Hours 22-24)
 
-### Core Libraries
-```python
-# Data processing
-pandas
-numpy
-geopandas
+### Slide Deck
+- [ ] Title slide with project name  
+- [ ] Problem statement (30 seconds)  
+- [ ] Data overview (1 minute)  
+- [ ] Live demo preparation (2 minutes)  
+- [ ] Key insights (1 minute)  
+- [ ] Technical details (backup slides)  
+- [ ] Future work (backup slides)  
 
-# Machine Learning
-scikit-learn
-xgboost
+### Demo Preparation
+- [ ] Test live demo flow  
+- [ ] Prepare specific dates to showcase  
+- [ ] Identify interesting locations to highlight  
+- [ ] Practice transitions  
+- [ ] Have backup screenshots if demo fails  
 
-# Geospatial & Mapping
-folium
-plotly
-shapely
-pyproj
+### Story Arc
+- [ ] Opening hook about shark attacks  
+- [ ] Show the interactive map  
+- [ ] Drag slider to show seasonal changes  
+- [ ] Click location to show details  
+- [ ] Present surprising findings  
+- [ ] Discuss practical applications  
 
-# Data visualization
-matplotlib
-seaborn
-
-# APIs
-requests
-python-dotenv
-
-# Web demo
-streamlit
-```
-
-### API Keys Needed
-- NOAA Climate Data API (free)
-- OpenWeatherMap API (free tier)
-- Optional: Google Maps API (for geocoding)
+### Practice
+- [ ] Run through presentation 2-3 times  
+- [ ] Time each section  
+- [ ] Prepare for Q&A  
+- [ ] Test demo on presentation laptop  
 
 ---
 
-## 📦 Project Structure
+## Key Deliverables Checklist
 
-```
-Durhack-2025/
-├── data/
-│   ├── raw/
-│   │   ├── gsaf_attacks.csv          # Historical shark attacks
-│   │   ├── ocean_temperature.csv     # SST data
-│   │   ├── tourism_estimates.csv     # Beach visitor data
-│   │   └── fish_migration.csv        # Prey availability
-│   └── processed/
-│       ├── feature_matrix.csv        # ML-ready features
-│       └── grid_cells.geojson        # Coastal grid system
-├── notebooks/
-│   ├── 01_data_collection.ipynb
-│   ├── 02_EDA.ipynb
-│   ├── 03_feature_engineering.ipynb
-│   └── 04_model_training.ipynb
-├── src/
-│   ├── data_collection.py            # API calls, scraping
-│   ├── preprocessing.py              # Data cleaning
-│   ├── feature_engineering.py        # Create features
-│   ├── grid_system.py                # Geospatial grid
-│   ├── model.py                      # ML model
-│   └── visualization.py              # Heatmap generation
-├── models/
-│   └── shark_risk_model.pkl          # Trained model
-├── maps/
-│   └── risk_heatmap.html             # Interactive map
-├── app.py                            # Streamlit demo
-├── .env.example                      # API key template
-├── requirements.txt
-├── README.md
-└── PROJECT_PLAN.md                   # This file
-```
+### Data Files
+- [ ] `shark_attacks_clean.csv`  
+- [ ] `prediction_locations.csv`  
+- [ ] `temp_lookup.json` or `.pkl`  
+- [ ] `migration_calendar.json`  
+- [ ] `tourism_patterns.json`  
+- [ ] `training_data.csv`  
+- [ ] `train.csv` and `test.csv`  
+
+### Model Files
+- [ ] `shark_model.pkl`  
+- [ ] `feature_importance.png`  
+- [ ] `model_metrics.txt`  
+
+### Application
+- [ ] Interactive web application  
+- [ ] Working date slider  
+- [ ] Real-time risk predictions  
+- [ ] Visual heatmap  
+
+### Presentation
+- [ ] Slide deck (PDF or PowerPoint)  
+- [ ] Demo video (backup)  
+- [ ] GitHub repository with README  
 
 ---
 
-## 🎯 Success Criteria
+## Emergency Contingencies
 
-### Minimum Viable Product (MVP)
-- [ ] Historical attack data collected and cleaned
-- [ ] Basic risk model trained (>60% accuracy)
-- [ ] Static heatmap visualization created
-- [ ] Can predict risk for at least 3 major coastal regions
-- [ ] Clear presentation explaining approach
+### If Running Out of Time
+**Priority 1 (Must Have):**
+- [ ] Working model with predictions  
+- [ ] Basic map visualization  
+- [ ] Date slider functionality  
 
-### Stretch Goals
-- [ ] Interactive web demo with real-time predictions
-- [ ] Multiple activity-specific risk maps
-- [ ] Temporal predictions (seasonal risk changes)
-- [ ] >75% model accuracy with good precision/recall
-- [ ] Published dataset and model on GitHub
+**Priority 2 (Should Have):**
+- [ ] Feature importance analysis  
+- [ ] 1-2 key insights identified  
+- [ ] Polished presentation  
 
----
+**Priority 3 (Nice to Have):**
+- [ ] Click interactions  
+- [ ] Animation mode  
+- [ ] Detailed tooltips  
 
-## 📝 Model Evaluation Strategy
+### If Data Issues
+- [ ] Reduce prediction locations to 25-50  
+- [ ] Use simplified temperature estimates  
+- [ ] Focus on 1-2 regions with best data  
+- [ ] Simplify migration calendar  
 
-### Metrics to Track
-1. **Precision**: Of predicted high-risk zones, how many actually had attacks?
-2. **Recall**: Of actual attacks, how many occurred in predicted high-risk zones?
-3. **F1-Score**: Balance of precision and recall
-4. **Spatial Accuracy**: Are predictions geographically sensible?
-
-### Validation Approach
-- **Temporal split**: Train on older data, test on recent years
-- **Geographic split**: Train on some regions, test on others
-- **Cross-validation**: K-fold with spatial awareness
-
----
-
-## 🎤 Presentation Tips
-
-### Demo Flow (3-5 minutes)
-1. **Hook** (30s): "Shark attacks are rare but devastating. What if we could predict where they'll happen?"
-2. **Problem** (30s): Current approach is reactive; we want predictive safety
-3. **Data** (45s): Show the multi-source data (GSAF, ocean temp, tourism, etc.)
-4. **Model** (45s): Explain how we predict risk zones
-5. **Demo** (90s): Show interactive heatmap, pick a location, explain prediction
-6. **Impact** (30s): Beach safety, resource allocation, evidence-based warnings
-
-### Key Talking Points
-- **Novelty**: Multi-factor geospatial prediction (not just historical clustering)
-- **Accuracy**: Model performance metrics
-- **Interpretability**: Show feature importance (temperature matters!)
-- **Usability**: Beach authorities can use this for real safety decisions
-- **Cool factor**: Interactive map is visually impressive
-
-### Handling Questions
-- **"How accurate is it?"** → Focus on precision/recall for high-risk zones
-- **"What data did you use?"** → List sources, mention limitations
-- **"Is this deployable?"** → Yes, with more data and validation
-- **"What about false alarms?"** → Discuss precision-recall tradeoff
-
----
-
-## 🚨 Potential Challenges & Solutions
-
-### Challenge: Limited historical attack data
-**Solution**: 
-- Use all available GSAF data (1900s to present)
-- Augment with near-miss data if available
-- Use data augmentation techniques
-
-### Challenge: Tourism data hard to find
-**Solution**:
-- Use proxies: population density, beach ratings, social media
-- Manual estimates for popular beaches
-- Focus on relative differences (high vs low tourism)
-
-### Challenge: Model might be overfitted to historical data
-**Solution**:
-- Use regularization
-- Test on recent years
-- Focus on generalizable features (temp, season)
-
-### Challenge: Real-time data integration is complex
-**Solution**:
-- Start with static predictions by season
-- Demo with "what-if" scenarios
-- Mention real-time as future work
-
----
-
-## 🔍 Data Collection Specifics
-
-### GSAF Data
-**Website**: https://www.sharkattackfile.net/
-**Alternative**: Kaggle - search "shark attack dataset"
-
-**Key fields**:
-- Date
-- Country/State/Location
-- Activity
-- Species
-- Fatal/Non-fatal
-
-### NOAA Ocean Temperature
-**API**: https://www.ncdc.noaa.gov/cdo-web/webservices/v2
-**Free tier**: 1000 requests/day
-**Data**: Sea Surface Temperature (SST) by coordinates
-
-### Tourism Data
-**Sources**:
-- Tourism agency reports (PDF → manual entry)
-- TripAdvisor beach ratings/review counts
-- Google Popular Times (if accessible)
-- Wikipedia beach traffic estimates
-
----
-
-## ✅ Pre-Submission Checklist
-
-- [ ] Code runs without errors
-- [ ] Heatmap displays correctly
-- [ ] Model performance documented
-- [ ] README explains project clearly
-- [ ] GitHub repo is organized and clean
-- [ ] Demo is rehearsed and timed
-- [ ] All team members can explain the approach
-- [ ] API keys are in `.env` (not committed!)
-- [ ] Data sources are cited
-
----
-
-## 🏆 Why This Will Impress Judges
-
-1. **Real-world impact**: Actual safety application
-2. **Technical depth**: Geospatial ML + multiple data sources
-3. **Visual appeal**: Interactive heatmap is eye-catching
-4. **Novelty**: Predictive, not just descriptive
-5. **Presentation**: Clear problem → solution → demo flow
-6. **Completeness**: Data + model + visualization + demo
-
----
-
-Good luck! 🦈🗺️ You've got a fantastic project idea!
-
-**Remember**: Focus on getting a working MVP first, then add polish. A simple working demo beats a complex broken one every time!
+### If Model Performance Poor
+- [ ] Frame as "risk indicator" not "predictor"  
+- [ ] Focus on visualization and interactivity  
+- [ ] Emphasize data integration novelty  
+- [ ] Show feature importance regardless of accuracy  

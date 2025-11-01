@@ -105,13 +105,15 @@ class NOAAOISSTFetcher:
             print("Alternative: Download data manually from https://www.ncei.noaa.gov/products/optimum-interpolation-sst")
             return None
     
-    def create_grid_from_sst(self, sst_df, grid_resolution=0.5):
+    def create_grid_from_sst(self, sst_df, grid_resolution=0.5, preserve_time=True):
         """
         Convert SST data to a regular grid for heatmap.
         
         Args:
             sst_df: DataFrame with SST data (columns: time, latitude, longitude, sst)
             grid_resolution: Grid cell size in degrees
+            preserve_time: If True, keep date information (one row per date per cell)
+                          If False, average across all dates (one row per cell)
             
         Returns:
             DataFrame with gridded SST values
@@ -121,28 +123,48 @@ class NOAAOISSTFetcher:
         
         print(f"Creating grid with {grid_resolution}° resolution...")
         
+        # Parse time column if it exists and convert to date
+        if 'time' in sst_df.columns:
+            sst_df['date'] = pd.to_datetime(sst_df['time']).dt.date
+            sst_df['year'] = pd.to_datetime(sst_df['time']).dt.year
+            sst_df['month'] = pd.to_datetime(sst_df['time']).dt.month
+            sst_df['day'] = pd.to_datetime(sst_df['time']).dt.day
+        
         # Group by grid cells
         sst_df['lat_grid'] = (sst_df['latitude'] / grid_resolution).round() * grid_resolution
         sst_df['lon_grid'] = (sst_df['longitude'] / grid_resolution).round() * grid_resolution
         
-        # Average SST per grid cell
-        grid_df = sst_df.groupby(['lat_grid', 'lon_grid']).agg({
-            'sst': ['mean', 'std', 'min', 'max', 'count']
-        }).reset_index()
+        # Group by location and optionally time
+        if preserve_time and 'date' in sst_df.columns:
+            group_cols = ['lat_grid', 'lon_grid', 'date', 'year', 'month', 'day']
+            grid_df = sst_df.groupby(group_cols).agg({
+                'sst': ['mean', 'std', 'min', 'max', 'count']
+            }).reset_index()
+            
+            # Flatten column names
+            grid_df.columns = ['latitude', 'longitude', 'date', 'year', 'month', 'day', 
+                              'sst_mean', 'sst_std', 'sst_min', 'sst_max', 'data_points']
+            print(f"✓ Created grid with {len(grid_df)} cells (with dates)")
+        else:
+            # Average across all time periods
+            grid_df = sst_df.groupby(['lat_grid', 'lon_grid']).agg({
+                'sst': ['mean', 'std', 'min', 'max', 'count']
+            }).reset_index()
+            
+            # Flatten column names
+            grid_df.columns = ['latitude', 'longitude', 'sst_mean', 'sst_std', 'sst_min', 'sst_max', 'data_points']
+            print(f"✓ Created grid with {len(grid_df)} cells (averaged over time)")
         
-        # Flatten column names
-        grid_df.columns = ['latitude', 'longitude', 'sst_mean', 'sst_std', 'sst_min', 'sst_max', 'data_points']
-        
-        print(f"✓ Created grid with {len(grid_df)} cells")
         return grid_df
     
-    def fetch_all_regions(self, start_date=None, end_date=None):
+    def fetch_all_regions(self, start_date=None, end_date=None, save_both=True):
         """
         Fetch SST data for all defined coastal regions.
         
         Args:
             start_date: Start date (YYYY-MM-DD)
             end_date: End date (YYYY-MM-DD)
+            save_both: If True, save both time-preserved and time-averaged versions
             
         Returns:
             Dictionary of DataFrames, one per region
@@ -154,21 +176,42 @@ class NOAAOISSTFetcher:
             sst_df = self.fetch_sst_data(region_name, start_date, end_date)
             
             if sst_df is not None:
-                grid_df = self.create_grid_from_sst(sst_df)
-                all_data[region_name] = grid_df
-                
-                # Save to CSV
-                output_file = self.output_dir / f'sst_grid_{region_name.lower()}.csv'
-                grid_df.to_csv(output_file, index=False)
-                print(f"✓ Saved to {output_file}")
+                if save_both:
+                    # Save version WITH dates (for matching with shark attacks)
+                    grid_df_with_time = self.create_grid_from_sst(sst_df, preserve_time=True)
+                    output_file_time = self.output_dir / f'sst_grid_{region_name.lower()}_with_dates.csv'
+                    grid_df_with_time.to_csv(output_file_time, index=False)
+                    print(f"✓ Saved (with dates) to {output_file_time}")
+                    
+                    # Save version WITHOUT dates (for general heatmap)
+                    grid_df_avg = self.create_grid_from_sst(sst_df, preserve_time=False)
+                    output_file_avg = self.output_dir / f'sst_grid_{region_name.lower()}_averaged.csv'
+                    grid_df_avg.to_csv(output_file_avg, index=False)
+                    print(f"✓ Saved (averaged) to {output_file_avg}")
+                    
+                    all_data[region_name] = {
+                        'with_time': grid_df_with_time,
+                        'averaged': grid_df_avg
+                    }
+                else:
+                    # Default: save with time preserved
+                    grid_df = self.create_grid_from_sst(sst_df, preserve_time=True)
+                    all_data[region_name] = grid_df
+                    
+                    output_file = self.output_dir / f'sst_grid_{region_name.lower()}.csv'
+                    grid_df.to_csv(output_file, index=False)
+                    print(f"✓ Saved to {output_file}")
             else:
                 print(f"✗ Failed to fetch data for {region_name}")
         
         return all_data
     
-    def create_sample_data(self):
+    def create_sample_data(self, with_dates=True):
         """
         Create sample SST data for testing (when API is unavailable).
+        
+        Args:
+            with_dates: If True, include date information for past year
         
         Returns:
             DataFrame with sample SST data
@@ -177,35 +220,72 @@ class NOAAOISSTFetcher:
         
         sample_data = []
         
-        for region_name, bounds in self.COASTAL_REGIONS.items():
-            # Create grid
-            lats = np.arange(bounds['lat_min'], bounds['lat_max'], 0.5)
-            lons = np.arange(bounds['lon_min'], bounds['lon_max'], 0.5)
-            
-            for lat in lats:
-                for lon in lons:
-                    # Simulate SST (warmer near equator, seasonal variation)
-                    base_temp = 28 - abs(lat) * 0.4  # Cooler away from equator
-                    seasonal_var = np.random.normal(0, 2)  # Random variation
-                    sst = base_temp + seasonal_var
-                    
-                    sample_data.append({
-                        'region': region_name,
-                        'latitude': lat,
-                        'longitude': lon,
-                        'sst_mean': sst,
-                        'sst_std': np.random.uniform(0.5, 2.0),
-                        'sst_min': sst - 2,
-                        'sst_max': sst + 2,
-                        'data_points': 30
-                    })
+        # Generate dates for past year if requested
+        if with_dates:
+            dates = pd.date_range(
+                start=datetime.now() - timedelta(days=365),
+                end=datetime.now(),
+                freq='7D'  # Weekly samples
+            )
+        else:
+            dates = [None]
+        
+        for date in dates:
+            for region_name, bounds in self.COASTAL_REGIONS.items():
+                # Create grid
+                lats = np.arange(bounds['lat_min'], bounds['lat_max'], 0.5)
+                lons = np.arange(bounds['lon_min'], bounds['lon_max'], 0.5)
+                
+                for lat in lats:
+                    for lon in lons:
+                        # Simulate SST (warmer near equator, seasonal variation)
+                        base_temp = 28 - abs(lat) * 0.4  # Cooler away from equator
+                        
+                        # Add seasonal variation based on month
+                        if date is not None:
+                            month = date.month
+                            # Northern hemisphere: warmer in Jun-Aug, cooler in Dec-Feb
+                            if lat > 0:
+                                seasonal_effect = 3 * np.cos((month - 7) * np.pi / 6)
+                            # Southern hemisphere: opposite
+                            else:
+                                seasonal_effect = 3 * np.cos((month - 1) * np.pi / 6)
+                        else:
+                            seasonal_effect = 0
+                        
+                        random_var = np.random.normal(0, 1.5)
+                        sst = base_temp + seasonal_effect + random_var
+                        
+                        data_point = {
+                            'region': region_name,
+                            'latitude': lat,
+                            'longitude': lon,
+                            'sst_mean': sst,
+                            'sst_std': np.random.uniform(0.5, 2.0),
+                            'sst_min': sst - 2,
+                            'sst_max': sst + 2,
+                            'data_points': 30
+                        }
+                        
+                        if date is not None:
+                            data_point['date'] = date.date()
+                            data_point['year'] = date.year
+                            data_point['month'] = date.month
+                            data_point['day'] = date.day
+                        
+                        sample_data.append(data_point)
         
         df = pd.DataFrame(sample_data)
         
         # Save combined sample data
-        output_file = self.output_dir / 'sst_grid_sample.csv'
+        if with_dates:
+            output_file = self.output_dir / 'sst_grid_sample_with_dates.csv'
+            print(f"✓ Sample data with dates saved to {output_file}")
+        else:
+            output_file = self.output_dir / 'sst_grid_sample.csv'
+            print(f"✓ Sample data (no dates) saved to {output_file}")
+        
         df.to_csv(output_file, index=False)
-        print(f"✓ Sample data saved to {output_file}")
         
         return df
 
@@ -242,14 +322,25 @@ def main():
     except Exception as e:
         print(f"\n⚠ Could not fetch real data: {e}")
         print("\n📊 Creating sample data instead...")
-        fetcher.create_sample_data()
+        fetcher.create_sample_data(with_dates=True)
     
     print("\n" + "=" * 60)
     print("✓ Data fetching complete!")
     print("\nNext steps:")
     print("  1. Check data/raw/ for SST CSV files")
     print("  2. Use this data in your shark attack model")
-    print("  3. Merge with GSAF attack data by location")
+    print("  3. Merge with GSAF attack data by location AND date")
+    print("\n📊 Data format:")
+    print("  • *_with_dates.csv: Has date/year/month/day columns for temporal matching")
+    print("  • *_averaged.csv: Averaged over time for general heatmap")
+    print("\n💡 Integration example:")
+    print("  # Match attacks to SST by location AND date")
+    print("  merged = attacks_df.merge(")
+    print("      sst_df,")
+    print("      left_on=['lat_grid', 'lon_grid', 'attack_date'],")
+    print("      right_on=['latitude', 'longitude', 'date'],")
+    print("      how='left'")
+    print("  )")
     print("\nAlternative data sources:")
     print("  - https://www.ncei.noaa.gov/products/optimum-interpolation-sst")
     print("  - https://coastwatch.pfeg.noaa.gov/erddap/griddap/")
