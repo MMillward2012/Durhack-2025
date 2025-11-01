@@ -1,5 +1,27 @@
-tweepy
+# Core Data & ML
 pandas
 numpy
 scikit-learn
+
+# NLP & Sentiment Analysis
+nltk
+vaderSentiment
+textblob
+
+# Visualization
 matplotlib
+seaborn
+plotly
+
+# Twitter API (optional)
+tweepy
+
+# Web Demo (optional/stretch)
+streamlit
+
+# Advanced ML (optional)
+xgboost
+
+# Jupyter
+jupyter
+ipykernel
