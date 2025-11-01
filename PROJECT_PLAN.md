@@ -1,207 +1,320 @@
-# Tweet Polarization Predictor - Project Plan
+# 🦈 Shark Attack Prediction Heatmap - Project Plan
 ## Durham Hackathon 2025
 
 ---
 
 ## 🎯 Project Goal
-**Predict whether a topic will become polarized or die off based on the first N tweets (20, 50, or 100).**
+**Predict shark attack risk zones using historical data and environmental factors to create an interactive heatmap.**
 
-This is a novel approach to understanding social media dynamics by analyzing early signals in tweet conversations to forecast whether a topic will:
-- **Polarize**: Generate strong opposing viewpoints and heated debate
-- **Die Off**: Fade away without gaining traction or engagement
-
----
-
-## 💡 Why This is Novel & Creative
-- **Early Detection**: Most sentiment analysis looks at trends retrospectively. We're predicting the *future* trajectory.
-- **Small Sample Size**: Using just the first 20-100 tweets makes this a challenging ML problem.
-- **Real-World Impact**: Could help brands, journalists, or platforms identify controversial topics early.
-- **Multi-dimensional Analysis**: Combines NLP, sentiment analysis, network effects, and temporal patterns.
+Build a predictive model that identifies high-risk areas and times for shark attacks based on:
+- Historical shark attack patterns (GSAF database)
+- Ocean conditions (temperature, currents)
+- Human activity levels (beach tourism, water sports)
+- Ecological factors (fish migration, prey availability)
+- Weather conditions (storms, visibility)
 
 ---
 
-## 📊 Project Scope
+## 💡 Why This is Novel & Impactful
 
-### Core Features (Must-Have)
-1. **Data Collection**: Gather sample tweets on various topics (use Twitter API or pre-collected datasets)
-2. **Feature Engineering**: Extract meaningful signals from early tweets
-3. **Model Training**: Build a classifier to predict polarization vs. die-off
-4. **Visualization**: Create an engaging demo showing predictions
+### Novelty
+- **Multi-factor prediction**: Most shark analysis is reactive; we're predicting future risk
+- **Geospatial ML**: Combining location data with temporal and environmental features
+- **Real-world utility**: Actually deployable for beach safety
+- **Data fusion**: Merging ecological, weather, tourism, and historical data
 
-### Stretch Goals (Nice-to-Have)
-- Real-time Twitter API integration
-- Interactive web dashboard
-- Confidence scores and explanation of predictions
-- Historical validation (show past predictions that came true)
+### Impact
+- **Public Safety**: Reduce shark attack incidents through early warnings
+- **Tourism Management**: Help beach authorities allocate resources
+- **Conservation**: Better understanding of shark-human interaction patterns
+- **Evidence-based policy**: Data-driven coastal management decisions
+
+---
+
+## 📊 Data Sources & Features
+
+### 1. **Historical Shark Attack Data (GSAF)**
+**Source**: Global Shark Attack File - https://www.sharkattackfile.net/
+- Attack locations (lat/long)
+- Date and time
+- Victim activity (surfing, swimming, diving, fishing)
+- Shark species (if identified)
+- Injury severity
+- Water conditions at time of attack
+
+### 2. **Ocean Temperature (SST - Sea Surface Temperature)**
+**Sources**: 
+- NOAA (https://www.ncei.noaa.gov/)
+- Copernicus Marine Service
+- OpenWeatherMap Ocean API
+
+**Features**:
+- Current SST by region
+- Temperature anomalies
+- Seasonal temperature patterns
+- Thermocline depth
+
+### 3. **Beach Tourism Data**
+**Sources**:
+- Local tourism boards
+- Google Popular Times API (for beaches)
+- Social media check-in data
+- Beach visitor statistics
+
+**Features**:
+- Daily/weekly visitor counts
+- Peak season vs off-season
+- Holiday periods
+- Local events
+
+### 4. **Fish Migration & Prey Availability**
+**Sources**:
+- FishBase (https://www.fishbase.org/)
+- Ocean Biogeographic Information System (OBIS)
+- Regional fisheries data
+
+**Features**:
+- Seasonal fish migrations
+- Baitfish abundance
+- Spawning seasons
+- Marine protected areas
+
+### 5. **Coastal Weather Conditions**
+**Sources**:
+- NOAA Weather API
+- OpenWeatherMap
+- Local meteorological services
+
+**Features**:
+- Wave height and conditions
+- Water visibility
+- Storm activity
+- Wind speed/direction
+- Tidal patterns
+
+### 6. **Victim Activity Classification**
+**From GSAF data**:
+- Surfing/bodyboarding
+- Swimming/wading
+- Diving/snorkeling
+- Fishing
+- Kayaking/paddleboarding
+- Standing in water
 
 ---
 
 ## 🔬 Technical Approach
 
-### Data Features to Extract
-From the first N tweets, we'll analyze:
+### Phase 1: Data Collection & Preprocessing
+1. **Scrape/download GSAF data** (primary source)
+2. **Fetch ocean temperature data** (NOAA API)
+3. **Collect tourism statistics** (manual + APIs)
+4. **Get fish migration data** (databases)
+5. **Weather data collection** (APIs)
+6. **Geospatial data cleanup** (standardize coordinates)
 
-1. **Sentiment Metrics**
-   - Overall sentiment distribution (positive, negative, neutral)
-   - Sentiment variance (high variance = polarization signal)
-   - Rapid sentiment shifts
+### Phase 2: Feature Engineering
+Create risk factors:
+- **Temporal features**: month, season, time of day, day of week
+- **Ocean features**: SST, temp anomaly, thermocline
+- **Activity risk scores**: historical attack rates by activity type
+- **Tourism density**: visitor count normalization
+- **Ecological features**: prey availability score
+- **Weather risk**: visibility, wave height, storm proximity
+- **Historical risk**: past attacks in region (spatial clustering)
 
-2. **Engagement Patterns**
-   - Retweet/like velocity
-   - Reply-to-tweet ratio (high replies = engagement/debate)
-   - User diversity (few users = echo chamber, many = broad interest)
+### Phase 3: Model Development
+**Approach**: Geospatial risk prediction
 
-3. **Linguistic Features**
-   - Emotional intensity words
-   - Controversial keywords
-   - Question marks and exclamation points (indicating debate)
-   - Emoji usage patterns
+**Model Options**:
+1. **Grid-based Classification**:
+   - Divide coastal regions into grid cells
+   - Train classifier for "high risk" vs "low risk" per cell
+   - Models: Random Forest, XGBoost, Logistic Regression
 
-4. **Network Signals**
-   - User interaction patterns
-   - Influencer involvement
-   - Echo chamber detection
+2. **Density-based Prediction**:
+   - Kernel Density Estimation (KDE) on historical attacks
+   - Weighted by environmental conditions
+   - Output: probability heatmap
 
-5. **Temporal Patterns**
-   - Tweet frequency acceleration
-   - Time gaps between tweets
+3. **Time-series Forecasting** (stretch):
+   - Predict risk levels for future dates
+   - LSTM or Prophet for temporal patterns
 
-### Model Options
-- **Baseline**: Logistic Regression (simple, interpretable)
-- **Advanced**: Random Forest or XGBoost (better accuracy)
-- **Stretch**: LSTM/Transformer for sequential patterns
+**Target Variable**:
+- Binary: High risk (1) vs Low risk (0) per grid cell
+- Or continuous: Attack probability score (0-1)
+
+### Phase 4: Visualization
+**Interactive Heatmap**:
+- **Base map**: Folium or Plotly
+- **Heat layer**: Color-coded risk zones
+- **Interactive filters**: Date range, activity type, region
+- **Info popups**: Risk factors for each zone
+- **Time slider**: Show risk changes over seasons
+
+**Additional Visualizations**:
+- Attack frequency by month/season
+- Risk correlation with temperature
+- Activity-specific risk maps
+- Historical vs predicted overlays
 
 ---
 
 ## 📅 24-Hour Development Timeline
 
-### **Hour 0-2: Setup & Data Collection**
-**Goal**: Environment ready, data sourced
+### **Hour 0-3: Data Collection & Setup**
+**Goal**: Get all data sources loaded
 
-- [ ] Set up Python environment with all dependencies
-- [ ] Decide on N (20, 50, or 100 tweets) based on data availability
-- [ ] Source data:
-  - **Option A**: Use Twitter API (requires API keys)
-  - **Option B**: Use pre-collected datasets (Kaggle, academic datasets)
-  - **Option C**: Create synthetic data for proof-of-concept
-- [ ] Label some topics manually (polarized vs. died off)
-  - Examples: 
-    - **Polarized**: Political topics, controversial news
-    - **Died Off**: Minor celebrity gossip, random trends
+- [ ] Download GSAF dataset (CSV from website or Kaggle)
+- [ ] Sign up for NOAA API access
+- [ ] Sign up for OpenWeatherMap API (free tier)
+- [ ] Create data directory structure
+- [ ] Initial data exploration in Jupyter
+- [ ] Identify key coastal regions to focus on (e.g., Australia, California, Florida, South Africa)
 
-**Deliverable**: `data/` folder with raw tweet data
+**Deliverable**: `data/raw/` folder with GSAF, SST samples, tourism estimates
 
 ---
 
-### **Hour 2-6: Data Exploration & Preprocessing**
-**Goal**: Clean data, understand patterns
+### **Hour 3-6: Data Cleaning & EDA**
+**Goal**: Understand patterns, clean data
 
-- [ ] Load tweets into pandas DataFrame
-- [ ] Clean text (remove URLs, mentions, special characters)
-- [ ] Exploratory Data Analysis (EDA):
-  - Plot sentiment distributions
-  - Analyze engagement metrics
-  - Look for patterns distinguishing polarized vs. died-off topics
-- [ ] Create labeled dataset with ground truth
-- [ ] Split data: 70% train, 15% validation, 15% test
+- [ ] Clean GSAF data (handle missing values, standardize locations)
+- [ ] Geocode any text-based locations to lat/long
+- [ ] Merge datasets by location and date
+- [ ] Exploratory visualizations:
+  - Attack frequency by region
+  - Seasonal patterns
+  - Activity type distribution
+  - Temperature correlation
+- [ ] Identify data quality issues
 
 **Deliverable**: `notebooks/EDA.ipynb` with insights
 
 ---
 
-### **Hour 6-12: Feature Engineering & Model Development**
-**Goal**: Build predictive features and first model
+### **Hour 6-10: Feature Engineering & Grid Creation**
+**Goal**: Build feature matrix for ML
 
-- [ ] Implement feature extraction pipeline:
-  - Sentiment analysis (VADER or TextBlob)
-  - Engagement metrics calculation
-  - Text statistics (length, caps usage, etc.)
-- [ ] Create feature matrix for ML
+- [ ] Create coastal grid system (e.g., 0.5° x 0.5° cells)
+- [ ] Assign attacks to grid cells
+- [ ] Calculate features per grid cell:
+  - Historical attack count
+  - Average SST
+  - Tourism density estimate
+  - Prey availability score
+  - Weather risk factors
+- [ ] Create labeled dataset (high risk = cells with attacks)
+- [ ] Handle class imbalance (many cells have 0 attacks)
+
+**Deliverable**: `data/processed/feature_matrix.csv`
+
+---
+
+### **Hour 10-14: Model Training & Validation**
+**Goal**: Build predictive model
+
+- [ ] Split data: 70% train, 15% validation, 15% test
 - [ ] Train baseline model (Logistic Regression)
-- [ ] Evaluate performance (accuracy, precision, recall, F1)
-- [ ] Feature importance analysis
-- [ ] Iterate: add/remove features to improve model
-
-**Deliverable**: `src/feature_engineering.py`, `src/model.py`
-
----
-
-### **Hour 12-16: Model Optimization & Validation**
-**Goal**: Improve accuracy, validate robustness
-
-- [ ] Try advanced models (Random Forest, XGBoost)
+- [ ] Train advanced models (Random Forest, XGBoost)
 - [ ] Hyperparameter tuning
-- [ ] Cross-validation to prevent overfitting
-- [ ] Test on held-out test set
-- [ ] Error analysis: which topics are hard to predict?
-- [ ] Document model performance metrics
+- [ ] Cross-validation
+- [ ] Evaluate metrics:
+  - Precision/Recall (important for safety!)
+  - ROC-AUC
+  - Confusion matrix
+- [ ] Feature importance analysis
+- [ ] Model interpretation
 
-**Deliverable**: `models/` folder with trained models, performance report
-
----
-
-### **Hour 16-20: Visualization & Demo Creation**
-**Goal**: Make results presentable and impressive
-
-- [ ] Create visualization showing:
-  - Model predictions vs. actual outcomes
-  - Feature importance
-  - Example tweets from polarized vs. died-off topics
-- [ ] Build simple demo interface:
-  - **Option A**: Streamlit web app (fastest)
-  - **Option B**: Flask/FastAPI backend + simple HTML frontend
-  - **Option C**: Jupyter notebook with interactive widgets
-- [ ] Add "prediction confidence" scores
-- [ ] Include 2-3 case studies with explanations
-
-**Deliverable**: `app.py` or demo notebook, visualizations in `data/visualizations/`
+**Deliverable**: `models/shark_risk_model.pkl`, performance report
 
 ---
 
-### **Hour 20-23: Polish & Presentation Prep**
-**Goal**: Finalize everything for judging
+### **Hour 14-18: Heatmap Visualization**
+**Goal**: Create interactive map
 
-- [ ] Write clear README with:
-  - Project description
-  - How to run the demo
-  - Results summary
-- [ ] Create slide deck or demo script
-- [ ] Prepare 3-minute pitch highlighting:
-  - The problem (predicting polarization early)
-  - Your approach (features + ML)
-  - Results (accuracy, cool examples)
-  - Impact/novelty
+- [ ] Install/setup Folium or Plotly
+- [ ] Generate base coastal map
+- [ ] Overlay risk predictions as heatmap
+- [ ] Add interactive elements:
+  - Click on zone for details
+  - Filter by season/month
+  - Toggle different risk factors
+- [ ] Create static visualizations for presentation
+- [ ] Export high-quality images
+
+**Deliverable**: Interactive HTML map, static charts
+
+---
+
+### **Hour 18-22: Demo Application & Polish**
+**Goal**: Finalize presentation
+
+- [ ] Build Streamlit demo app:
+  - Upload location
+  - Select date/season
+  - Choose activity type
+  - See risk prediction + heatmap
+- [ ] Add example case studies
+- [ ] Create presentation slides
+- [ ] Document methodology
+- [ ] Clean up code
+- [ ] Write clear README
+
+**Deliverable**: `app.py`, presentation slides
+
+---
+
+### **Hour 22-24: Testing, Practice & Buffer**
+**Goal**: Ready for judging
+
 - [ ] Test demo end-to-end
-- [ ] Clean up code and add comments
-- [ ] Push everything to GitHub
+- [ ] Prepare 3-5 minute pitch
+- [ ] Practice presentation
+- [ ] Prepare for Q&A
+- [ ] Final GitHub push
+- [ ] Backup demo (screenshots/video)
 
-**Deliverable**: Polished demo, presentation materials
-
----
-
-### **Hour 23-24: Buffer & Contingency**
-**Goal**: Handle unexpected issues, practice presentation
-
-- [ ] Fix any last-minute bugs
-- [ ] Practice presenting together
-- [ ] Prepare for Q&A (what if judges ask about accuracy, datasets, etc.)
-- [ ] Celebrate! 🎉
+**Deliverable**: Polished demo, practiced pitch
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack Details
 
 ### Core Libraries
-- **Data Processing**: `pandas`, `numpy`
-- **NLP**: `nltk`, `textblob` or `vaderSentiment`
-- **Machine Learning**: `scikit-learn`, optionally `xgboost`
-- **Visualization**: `matplotlib`, `seaborn`, `plotly`
-- **API (if using Twitter)**: `tweepy`
+```python
+# Data processing
+pandas
+numpy
+geopandas
 
-### Demo Options
-- **Quick**: Jupyter notebook with widgets
-- **Web App**: `streamlit` (easiest) or `flask`
-- **Advanced**: React frontend (if you have time)
+# Machine Learning
+scikit-learn
+xgboost
+
+# Geospatial & Mapping
+folium
+plotly
+shapely
+pyproj
+
+# Data visualization
+matplotlib
+seaborn
+
+# APIs
+requests
+python-dotenv
+
+# Web demo
+streamlit
+```
+
+### API Keys Needed
+- NOAA Climate Data API (free)
+- OpenWeatherMap API (free tier)
+- Optional: Google Maps API (for geocoding)
 
 ---
 
@@ -210,24 +323,35 @@ From the first N tweets, we'll analyze:
 ```
 Durhack-2025/
 ├── data/
-│   ├── raw/                 # Original tweet data
-│   ├── processed/           # Cleaned and labeled data
-│   └── visualizations/      # Charts and graphs
+│   ├── raw/
+│   │   ├── gsaf_attacks.csv          # Historical shark attacks
+│   │   ├── ocean_temperature.csv     # SST data
+│   │   ├── tourism_estimates.csv     # Beach visitor data
+│   │   └── fish_migration.csv        # Prey availability
+│   └── processed/
+│       ├── feature_matrix.csv        # ML-ready features
+│       └── grid_cells.geojson        # Coastal grid system
 ├── notebooks/
-│   ├── EDA.ipynb           # Exploratory analysis
-│   └── experiments.ipynb    # Model experiments
+│   ├── 01_data_collection.ipynb
+│   ├── 02_EDA.ipynb
+│   ├── 03_feature_engineering.ipynb
+│   └── 04_model_training.ipynb
 ├── src/
-│   ├── data_collection.py   # Tweet gathering
-│   ├── preprocessing.py     # Data cleaning
-│   ├── feature_engineering.py  # Extract features
-│   ├── model.py            # ML model training
-│   └── predict.py          # Make predictions
+│   ├── data_collection.py            # API calls, scraping
+│   ├── preprocessing.py              # Data cleaning
+│   ├── feature_engineering.py        # Create features
+│   ├── grid_system.py                # Geospatial grid
+│   ├── model.py                      # ML model
+│   └── visualization.py              # Heatmap generation
 ├── models/
-│   └── trained_model.pkl    # Saved model
-├── app.py                   # Demo application
+│   └── shark_risk_model.pkl          # Trained model
+├── maps/
+│   └── risk_heatmap.html             # Interactive map
+├── app.py                            # Streamlit demo
+├── .env.example                      # API key template
 ├── requirements.txt
 ├── README.md
-└── PROJECT_PLAN.md         # This file!
+└── PROJECT_PLAN.md                   # This file
 ```
 
 ---
@@ -235,112 +359,141 @@ Durhack-2025/
 ## 🎯 Success Criteria
 
 ### Minimum Viable Product (MVP)
-- [ ] Can predict polarization for at least 10 test topics
-- [ ] Achieves >70% accuracy
-- [ ] Has a working demo (even if just a notebook)
-- [ ] Can explain the approach clearly
+- [ ] Historical attack data collected and cleaned
+- [ ] Basic risk model trained (>60% accuracy)
+- [ ] Static heatmap visualization created
+- [ ] Can predict risk for at least 3 major coastal regions
+- [ ] Clear presentation explaining approach
 
 ### Stretch Goals
-- [ ] >80% accuracy
-- [ ] Interactive web demo
-- [ ] Real-time Twitter integration
-- [ ] Published on GitHub with documentation
+- [ ] Interactive web demo with real-time predictions
+- [ ] Multiple activity-specific risk maps
+- [ ] Temporal predictions (seasonal risk changes)
+- [ ] >75% model accuracy with good precision/recall
+- [ ] Published dataset and model on GitHub
 
 ---
 
-## 📝 Tips for Success
+## 📝 Model Evaluation Strategy
 
-1. **Start Simple**: Get a basic working model first, then improve
-2. **Time-box**: Don't spend >2 hours stuck on one problem
-3. **Document as You Go**: Write down insights immediately
-4. **Test Frequently**: Make sure each component works before moving on
-5. **Prepare Demo Early**: Start at Hour 16, not Hour 23!
-6. **Divide & Conquer**: Split tasks between team members
-7. **Use Pre-trained Models**: Don't train sentiment analysis from scratch
-8. **Focus on Story**: Judges care about novelty and presentation, not just accuracy
+### Metrics to Track
+1. **Precision**: Of predicted high-risk zones, how many actually had attacks?
+2. **Recall**: Of actual attacks, how many occurred in predicted high-risk zones?
+3. **F1-Score**: Balance of precision and recall
+4. **Spatial Accuracy**: Are predictions geographically sensible?
 
----
-
-## 🚀 Quick Start Commands
-
-```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run exploratory analysis
-jupyter notebook notebooks/EDA.ipynb
-
-# Run main script
-python main.py
-
-# Launch demo (if using Streamlit)
-streamlit run app.py
-```
+### Validation Approach
+- **Temporal split**: Train on older data, test on recent years
+- **Geographic split**: Train on some regions, test on others
+- **Cross-validation**: K-fold with spatial awareness
 
 ---
 
-## 🤝 Team Workflow Suggestions
+## 🎤 Presentation Tips
 
-### Pair Programming Approach
-- **Person A**: Data collection & preprocessing
-- **Person B**: Feature engineering & modeling
-- **Both**: Alternate on demo/visualization
+### Demo Flow (3-5 minutes)
+1. **Hook** (30s): "Shark attacks are rare but devastating. What if we could predict where they'll happen?"
+2. **Problem** (30s): Current approach is reactive; we want predictive safety
+3. **Data** (45s): Show the multi-source data (GSAF, ocean temp, tourism, etc.)
+4. **Model** (45s): Explain how we predict risk zones
+5. **Demo** (90s): Show interactive heatmap, pick a location, explain prediction
+6. **Impact** (30s): Beach safety, resource allocation, evidence-based warnings
 
-### Checkpoint Times
-- **Hour 6**: Review EDA findings together
-- **Hour 12**: Review first model results
-- **Hour 18**: Review demo progress
-- **Hour 22**: Final review and practice pitch
+### Key Talking Points
+- **Novelty**: Multi-factor geospatial prediction (not just historical clustering)
+- **Accuracy**: Model performance metrics
+- **Interpretability**: Show feature importance (temperature matters!)
+- **Usability**: Beach authorities can use this for real safety decisions
+- **Cool factor**: Interactive map is visually impressive
 
----
-
-## 📚 Useful Resources
-
-### Datasets
-- [Twitter Sentiment Analysis Dataset (Kaggle)](https://www.kaggle.com/datasets/jp797498e/twitter-entity-sentiment-analysis)
-- [Controversial Topics Dataset](https://www.kaggle.com/datasets)
-- Academic papers on polarization detection
-
-### Tools
-- [VADER Sentiment](https://github.com/cjhutto/vaderSentiment) - Great for social media
-- [Streamlit Gallery](https://streamlit.io/gallery) - Demo inspiration
-- [Scikit-learn Docs](https://scikit-learn.org/) - ML reference
+### Handling Questions
+- **"How accurate is it?"** → Focus on precision/recall for high-risk zones
+- **"What data did you use?"** → List sources, mention limitations
+- **"Is this deployable?"** → Yes, with more data and validation
+- **"What about false alarms?"** → Discuss precision-recall tradeoff
 
 ---
 
-## 🏆 Presentation Tips
+## 🚨 Potential Challenges & Solutions
 
-### What Judges Want to See
-1. **Novelty**: How is this different/interesting?
-2. **Technical Depth**: Real ML, not just an API wrapper
-3. **Polish**: Working demo beats perfect code
-4. **Clarity**: Can you explain it in 3 minutes?
-5. **Impact**: Why does this matter?
+### Challenge: Limited historical attack data
+**Solution**: 
+- Use all available GSAF data (1900s to present)
+- Augment with near-miss data if available
+- Use data augmentation techniques
 
-### Pitch Structure (3 minutes)
-1. **The Hook** (30s): "Did you know most controversial topics show warning signs in the first 20 tweets?"
-2. **The Problem** (30s): "We predict if topics will polarize or die off early"
-3. **The Solution** (60s): Show demo with real example
-4. **The Results** (45s): Accuracy, insights, cool findings
-5. **The Impact** (15s): Real-world applications
+### Challenge: Tourism data hard to find
+**Solution**:
+- Use proxies: population density, beach ratings, social media
+- Manual estimates for popular beaches
+- Focus on relative differences (high vs low tourism)
+
+### Challenge: Model might be overfitted to historical data
+**Solution**:
+- Use regularization
+- Test on recent years
+- Focus on generalizable features (temp, season)
+
+### Challenge: Real-time data integration is complex
+**Solution**:
+- Start with static predictions by season
+- Demo with "what-if" scenarios
+- Mention real-time as future work
+
+---
+
+## 🔍 Data Collection Specifics
+
+### GSAF Data
+**Website**: https://www.sharkattackfile.net/
+**Alternative**: Kaggle - search "shark attack dataset"
+
+**Key fields**:
+- Date
+- Country/State/Location
+- Activity
+- Species
+- Fatal/Non-fatal
+
+### NOAA Ocean Temperature
+**API**: https://www.ncdc.noaa.gov/cdo-web/webservices/v2
+**Free tier**: 1000 requests/day
+**Data**: Sea Surface Temperature (SST) by coordinates
+
+### Tourism Data
+**Sources**:
+- Tourism agency reports (PDF → manual entry)
+- TripAdvisor beach ratings/review counts
+- Google Popular Times (if accessible)
+- Wikipedia beach traffic estimates
 
 ---
 
 ## ✅ Pre-Submission Checklist
 
 - [ ] Code runs without errors
-- [ ] README is clear and complete
-- [ ] Demo works end-to-end
-- [ ] GitHub repo is public and organized
-- [ ] Presentation slides/script ready
-- [ ] All team members understand the project
-- [ ] Tested on fresh environment (no "works on my machine")
+- [ ] Heatmap displays correctly
+- [ ] Model performance documented
+- [ ] README explains project clearly
+- [ ] GitHub repo is organized and clean
+- [ ] Demo is rehearsed and timed
+- [ ] All team members can explain the approach
+- [ ] API keys are in `.env` (not committed!)
+- [ ] Data sources are cited
 
 ---
 
-Good luck! You've got this! 🚀
+## 🏆 Why This Will Impress Judges
 
-Remember: **Done is better than perfect** in a hackathon. Ship something working, then iterate!
+1. **Real-world impact**: Actual safety application
+2. **Technical depth**: Geospatial ML + multiple data sources
+3. **Visual appeal**: Interactive heatmap is eye-catching
+4. **Novelty**: Predictive, not just descriptive
+5. **Presentation**: Clear problem → solution → demo flow
+6. **Completeness**: Data + model + visualization + demo
+
+---
+
+Good luck! 🦈🗺️ You've got a fantastic project idea!
+
+**Remember**: Focus on getting a working MVP first, then add polish. A simple working demo beats a complex broken one every time!

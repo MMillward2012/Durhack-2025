@@ -2,25 +2,25 @@
 pandas
 numpy
 scikit-learn
+xgboost
 
-# NLP & Sentiment Analysis
-nltk
-vaderSentiment
-textblob
+# Geospatial
+geopandas
+folium
+shapely
+pyproj
 
 # Visualization
 matplotlib
 seaborn
 plotly
 
-# Twitter API (optional)
-tweepy
+# APIs & Data Collection
+requests
+python-dotenv
 
-# Web Demo (optional/stretch)
+# Web Demo
 streamlit
-
-# Advanced ML (optional)
-xgboost
 
 # Jupyter
 jupyter

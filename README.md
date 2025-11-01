@@ -1,12 +1,26 @@
-# Tweet Polarization Predictor 🔮
+# 🦈 Shark Attack Prediction Heatmap
 **Durham Hackathon 2025 - Predicting the Future Challenge**
 
 ## 🎯 What We're Building
-Can we predict whether a topic will **polarize** or **die off** based on just the first 20-100 tweets? 
+A predictive **heatmap model** that forecasts shark attack risk zones by analyzing multiple environmental and human activity factors.
 
-This project uses machine learning to analyze early signals in Twitter conversations and forecast whether a topic will:
-- **Polarize**: Generate heated debate and strong opposing viewpoints
-- **Die Off**: Fade away without gaining significant traction
+Can we predict where and when shark attacks are most likely to occur based on:
+- **Historical Attack Data** (GSAF - Global Shark Attack File)
+- **Ocean Temperature** (SST - Sea Surface Temperature)
+- **Beach Tourism Levels** (visitor counts, seasonal trends)
+- **Fish Migration Patterns** (prey availability)
+- **Coastal Weather Conditions** (storms, visibility, water clarity)
+- **Victim Activity Types** (surfing, swimming, diving, etc.)
+
+## 🌊 The Problem
+Shark attacks, while rare, have serious consequences. By predicting high-risk zones and times, we can:
+- Help beach authorities issue timely warnings
+- Inform tourists and water sports enthusiasts
+- Guide lifeguard and patrol resource allocation
+- Improve coastal safety planning
+
+## 🗺️ The Solution
+An interactive **risk heatmap** that visualizes predicted shark attack probability across coastal regions, updated based on real-time or seasonal data inputs.
 
 ## 🚀 Quick Start
 
@@ -30,24 +44,34 @@ python main.py
 
 ## 📋 Project Structure
 ```
-├── data/              # Tweet datasets (raw & processed)
-├── notebooks/         # Jupyter notebooks for EDA
-├── src/               # Source code (preprocessing, models, features)
+├── data/              
+│   ├── raw/           # GSAF data, ocean temp, tourism data
+│   └── processed/     # Cleaned & merged datasets
+├── notebooks/         # Jupyter notebooks for EDA & visualization
+├── src/               # Source code (data processing, models, mapping)
 ├── models/            # Trained ML models
-├── tests/             # Unit tests
+├── maps/              # Generated heatmap outputs
 ├── PROJECT_PLAN.md    # Detailed 24-hour hackathon plan
 └── requirements.txt   # Python dependencies
 ```
 
 ## 📖 Full Project Plan
-**→ See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the complete 24-hour development timeline, technical approach, and presentation tips!**
+**→ See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the complete 24-hour development timeline, data sources, and technical approach!**
 
 ## 🛠️ Tech Stack
-- **Data**: pandas, numpy
-- **NLP**: nltk, vaderSentiment, textblob
+- **Data Processing**: pandas, numpy
+- **Geospatial**: geopandas, folium, plotly
 - **ML**: scikit-learn, xgboost
-- **Visualization**: matplotlib, seaborn, plotly
-- **Demo**: streamlit (stretch goal)
+- **Visualization**: matplotlib, seaborn, plotly, folium
+- **Weather/Ocean Data**: NOAA APIs, OpenWeather
+- **Demo**: streamlit + interactive folium maps
+
+## 📊 Data Sources
+1. **GSAF (Global Shark Attack File)** - Historical attack records
+2. **NOAA** - Sea surface temperature, weather data
+3. **FishBase / Migration Data** - Fish movement patterns
+4. **Tourism Statistics** - Beach visitor data by region/season
+5. **Coastal Activity Data** - Water sports participation
 
 ## 👥 Team
 Durham Hackathon 2025 participants working on the "Predict the Future" challenge!
