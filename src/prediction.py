@@ -507,8 +507,8 @@ if __name__ == "__main__":
     
     results, lat_range, lon_range, prob_grid = main_prediction_pipeline(
         num_samples=1000000,  # High resolution: 300x300 grid (1.2° resolution)
-        year=2044, 
-        month=12,  # July (summer in Northern Hemisphere)
+        year=2024, 
+        month=6,  # July (summer in Northern Hemisphere)
         sigma=5  # Smoothing parameter
     )
 

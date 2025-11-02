@@ -671,9 +671,6 @@ export default function Globe({ data, viewMode, onViewModeChange }: GlobeProps) 
               <span className="text-gray-400">Risk Level:</span>{' '}
               <span className="text-yellow-400 font-semibold">{clickInfo.percentage}%</span>
             </p>
-            <p className="text-xs text-gray-500">
-              Probability: {clickInfo.probability.toFixed(6)}
-            </p>
           </div>
           <button 
             onClick={() => setClickInfo(null)}

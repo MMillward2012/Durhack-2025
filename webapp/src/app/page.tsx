@@ -248,12 +248,6 @@ export default function Home() {
                         {heatmapData.statistics.total_locations.toLocaleString()}
                       </span>
                     </div>
-                    <div className="flex justify-between items-baseline py-1">
-                      <span className="text-gray-300 text-xs">Years Since Baseline</span>
-                      <span className="text-white font-light text-sm">
-                        {heatmapData.climate_info.years_since_baseline}
-                      </span>
-                    </div>
                   </div>
                 </div>
 
