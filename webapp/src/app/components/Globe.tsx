@@ -61,6 +61,8 @@ interface HeatmapData {
 
 interface GlobeProps {
   data: HeatmapData | null;
+  viewMode: '3d' | '2d';
+  onViewModeChange: (mode: '3d' | '2d') => void;
 }
 
 const getHeatmapColorString = (probability: number, maxProbability: number): string | null => {
@@ -281,12 +283,11 @@ const gaussianFilter2D = (probGrid: number[][], sigma: number = 1.5): number[][]
   return filtered;
 };
 
-export default function Globe({ data }: GlobeProps) {
+export default function Globe({ data, viewMode, onViewModeChange }: GlobeProps) {
   const cesiumContainer = useRef<HTMLDivElement>(null);
   const viewer = useRef<Cesium.Viewer | null>(null);
   const heatmapLayer = useRef<Cesium.ImageryLayer | null>(null);
   const [clickInfo, setClickInfo] = useState<{ lat: number; lon: number; probability: number; percentage: string } | null>(null);
-  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d'); // Toggle between 3D and 2D views
 
   useEffect(() => {
     if (!cesiumContainer.current) return;
@@ -638,7 +639,7 @@ export default function Globe({ data }: GlobeProps) {
       {/* View mode toggle buttons - positioned to be visible next to sidebar */}
   <div className="absolute top-4 left-[340px] flex gap-2" style={{ zIndex: 1300 }}>
         <button
-          onClick={() => setViewMode('3d')}
+          onClick={() => onViewModeChange('3d')}
           className={`px-4 py-2 rounded-lg font-semibold transition-all ${
             viewMode === '3d'
               ? 'bg-blue-600 text-white shadow-lg'
@@ -648,7 +649,7 @@ export default function Globe({ data }: GlobeProps) {
           3D Globe
         </button>
         <button
-          onClick={() => setViewMode('2d')}
+          onClick={() => onViewModeChange('2d')}
           className={`px-4 py-2 rounded-lg font-semibold transition-all ${
             viewMode === '2d'
               ? 'bg-blue-600 text-white shadow-lg'

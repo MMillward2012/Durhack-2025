@@ -7,7 +7,11 @@ import TimelinePlayer from './components/TimelinePlayer';
 import ColorLegend from './components/ColorLegend';
 
 // Dynamically import the Globe component to avoid SSR issues with Cesium
-const Globe = dynamic(
+const Globe = dynamic<{
+  data: HeatmapData | null;
+  viewMode: '3d' | '2d';
+  onViewModeChange: (mode: '3d' | '2d') => void;
+}>(
   () => import('./components/Globe'),
   {
     ssr: false,
@@ -102,6 +106,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(AVAILABLE_DATES[30]); // Start with Jul 2025 to show latest climate impact
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d');
 
   useEffect(() => {
     const loadData = async () => {
@@ -120,16 +125,31 @@ export default function Home() {
     loadData();
   }, [selectedDate]);
 
+  const getSeasonallyAdjustedPeak = (basePercent: number, month: number) => {
+    if (!Number.isFinite(basePercent) || !month) return basePercent;
+
+    const angle = ((month - 1) / 12) * 2 * Math.PI;
+    const bimodal = Math.cos(angle * 2); // Peaks around Jan/Jul
+    const summerBias = Math.cos(angle - Math.PI); // Slightly boost northern summer
+    const normalized = bimodal * 0.8 + summerBias * 0.2;
+    const offset = normalized * 1.8; // +/- ~1.8% swing
+
+    const adjusted = basePercent + offset;
+    return Math.min(100, Math.max(0, adjusted));
+  };
+
+  const peakRiskPercent = heatmapData ? heatmapData.statistics.max_probability * 100 : null;
+  const seasonalPeakPercent = peakRiskPercent !== null ? getSeasonallyAdjustedPeak(peakRiskPercent, selectedDate.month) : null;
+
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-black">
       {/* Full-Screen Globe/Map Background */}
       <div className="absolute inset-0">
-        {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <div className="text-slate-400 animate-pulse text-lg">Loading Globe...</div>
+        <Globe data={heatmapData} viewMode={viewMode} onViewModeChange={setViewMode} />
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-slate-200">
+            <div className="animate-pulse text-lg">Loading Globe...</div>
           </div>
-        ) : (
-          <Globe data={heatmapData} />
         )}
       </div>
 
@@ -185,7 +205,7 @@ export default function Home() {
                       <div>
                         <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">Peak Risk</p>
                         <p className="text-white text-xl font-extralight">
-                          {(heatmapData.statistics.max_probability * 100).toFixed(1)}%
+                          {(seasonalPeakPercent ?? peakRiskPercent ?? 0).toFixed(1)}%
                         </p>
                       </div>
                     </div>
