@@ -176,10 +176,12 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
     # Get raw predictions from model
     raw_probabilities = model.predict_proba(X)[:, 1]
     
-    # Apply post-processing constraints based on shark density
+    # Apply post-processing constraints based on shark density and climate-adjusted temperature
     constrained_probabilities = []
     for i, raw_prob in enumerate(raw_probabilities):
         shark_density = df.iloc[i]['Real_Shark_Density']
+        sst = df.iloc[i]['SST_Celsius']
+        year = df.iloc[i]['Year']
         
         # Apply same constraints as in training model
         if shark_density == 0:
@@ -192,6 +194,33 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
         else:
             constrained_prob = raw_prob
         
+        # Apply climate-adjusted temperature scaling (post-processing effect)
+        # Add climate change factor: 0.03°C increase per year since 2010
+        climate_adjusted_sst = sst + (year - 2010) * 0.03
+        
+        # Temperature-based probability multiplier
+        if climate_adjusted_sst >= 28:
+            # Very warm waters - high shark activity
+            temp_multiplier = 1.4
+        elif climate_adjusted_sst >= 26:
+            # Optimal temperature range - increased activity
+            temp_multiplier = 1.3
+        elif climate_adjusted_sst >= 24:
+            # Good temperature range
+            temp_multiplier = 1.1
+        elif climate_adjusted_sst >= 20:
+            # Acceptable range
+            temp_multiplier = 1.0
+        elif climate_adjusted_sst >= 16:
+            # Suboptimal - reduced activity
+            temp_multiplier = 0.8
+        else:
+            # Too cold - very low activity
+            temp_multiplier = 0.6
+        
+        # Apply temperature scaling
+        constrained_prob = constrained_prob * temp_multiplier
+        
         # Ensure probability doesn't exceed reasonable bounds
         constrained_prob = min(constrained_prob, 0.95)  # Cap at 95%
         constrained_probabilities.append(constrained_prob)
@@ -203,6 +232,18 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
     print(f"  Std probability:  {probabilities.std():.1%}")
     print(f"  Max probability:  {probabilities.max():.1%}")
     print(f"  Min probability:  {probabilities.min():.1%}")
+    
+    # Climate change impact analysis
+    year = df['Year'].iloc[0]  # Assuming single year prediction
+    base_sst_mean = df['SST_Celsius'].mean()
+    climate_adjustment = (year - 2010) * 0.03
+    climate_adjusted_sst_mean = base_sst_mean + climate_adjustment
+    
+    print(f"\n🌡️ Climate Change Impact Analysis (Year {year}):")
+    print(f"  Base SST mean: {base_sst_mean:.2f}°C")
+    print(f"  Climate adjustment: +{climate_adjustment:.2f}°C")
+    print(f"  Climate-adjusted SST mean: {climate_adjusted_sst_mean:.2f}°C")
+    print(f"  Years since baseline (2010): {year - 2010}")
     
     # Show effect of post-processing
     raw_mean = raw_probabilities.mean()
@@ -466,9 +507,9 @@ if __name__ == "__main__":
     
     results, lat_range, lon_range, prob_grid = main_prediction_pipeline(
         num_samples=1000000,  # High resolution: 300x300 grid (1.2° resolution)
-        year=2024, 
-        month=7,  # July (summer in Northern Hemisphere)
-        sigma=1.5  # Smoothing parameter
+        year=2044, 
+        month=12,  # July (summer in Northern Hemisphere)
+        sigma=5  # Smoothing parameter
     )
 
 
