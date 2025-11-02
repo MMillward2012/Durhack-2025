@@ -122,11 +122,22 @@ export default function Home() {
 
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-black">
+      {/* Full-Screen Globe/Map Background */}
+      <div className="absolute inset-0">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black">
+            <div className="text-slate-400 animate-pulse text-lg">Loading Globe...</div>
+          </div>
+        ) : (
+          <Globe data={heatmapData} />
+        )}
+      </div>
+
       {/* Transparent Left Sidebar Area */}
-      <div className="w-80 relative z-10 flex flex-col">
+  <div className="w-80 relative flex flex-col" style={{ zIndex: 1200 }}>
         
-        {/* Single Dark Card - 90% screen height */}
-        <div className="mx-6 my-[5vh] h-[90vh] rounded-3xl shadow-2xl flex flex-col" style={{ backgroundColor: 'rgb(44,44,44)' }}>
+        {/* Single Dark Card with Transparency - 90% screen height */}
+        <div className="mx-6 my-[5vh] h-[90vh] rounded-3xl shadow-2xl flex flex-col backdrop-blur-sm" style={{ backgroundColor: 'rgba(44,44,44,0.95)' }}>
           
           {/* Header */}
           <div className="px-6 py-6 border-b border-gray-600">
@@ -250,17 +261,6 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Full-Screen Globe - Shifted Left */}
-      <div className="flex-1 relative -ml-16">
-        {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <div className="text-slate-400 animate-pulse text-lg">Loading 3D Globe...</div>
-          </div>
-        ) : (
-          <Globe data={heatmapData} />
-        )}
       </div>
     </div>
   );

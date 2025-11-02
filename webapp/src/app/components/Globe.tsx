@@ -2,6 +2,24 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import * as Cesium from 'cesium';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Leaflet map component to avoid SSR issues  
+const LeafletMap = dynamic<{
+  heatmapUrl: string | null;
+  onMapClick: (lat: number, lon: number) => void;
+  bounds: [[number, number], [number, number]];
+}>(
+  () => import('./LeafletMap').then(mod => mod.default) as Promise<React.ComponentType<{
+    heatmapUrl: string | null;
+    onMapClick: (lat: number, lon: number) => void;
+    bounds: [[number, number], [number, number]];
+  }>>,
+  { 
+    ssr: false,
+    loading: () => <div className="absolute inset-0 flex items-center justify-center bg-black text-white">Loading map...</div>
+  }
+);
 
 // Set the Cesium Ion access token (you can get a free one from cesium.com)
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyYWRhOTBkNi1iYWQwLTQ4YzYtODFiNy03NDJlOWMxMWZiMGMiLCJpZCI6MjM4NDE4LCJpYXQiOjE3MzA1MTc2MTl9.xmkFgpekJKKBo67CzlRoP4ld-4JTKN5q5JE8CHY7hbE';
@@ -268,6 +286,7 @@ export default function Globe({ data }: GlobeProps) {
   const viewer = useRef<Cesium.Viewer | null>(null);
   const heatmapLayer = useRef<Cesium.ImageryLayer | null>(null);
   const [clickInfo, setClickInfo] = useState<{ lat: number; lon: number; probability: number; percentage: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d'); // Toggle between 3D and 2D views
 
   useEffect(() => {
     if (!cesiumContainer.current) return;
@@ -433,6 +452,8 @@ export default function Globe({ data }: GlobeProps) {
 
     const { lat_range, lon_range, prob_grid, statistics } = data;
 
+    
+
     // Remove existing heatmap layer before rendering a new one
     if (heatmapLayer.current && viewer.current.imageryLayers.contains(heatmapLayer.current)) {
       viewer.current.imageryLayers.remove(heatmapLayer.current, true);
@@ -483,17 +504,164 @@ export default function Globe({ data }: GlobeProps) {
 
   }, [data]);
 
+  // Render 2D flat map with Leaflet and OpenStreetMap satellite imagery
+  const render2DMap = () => {
+    if (!data) return null;
+
+    const { lat_range, lon_range, prob_grid, statistics } = data;
+    const datasetMinLat = lat_range[0];
+    const datasetMaxLat = lat_range[lat_range.length - 1];
+    const datasetMinLon = lon_range[0];
+    const datasetMaxLon = lon_range[lon_range.length - 1];
+    const latSpan = Math.max(0.0001, datasetMaxLat - datasetMinLat);
+    const lonSpan = Math.max(0.0001, datasetMaxLon - datasetMinLon);
+    const renderMinLat = Math.max(-85, Math.min(85, datasetMinLat));
+    const renderMaxLat = Math.max(-85, Math.min(85, datasetMaxLat));
+    const renderBounds: [[number, number], [number, number]] = [
+      [renderMinLat, datasetMinLon],
+      [renderMaxLat, datasetMaxLon]
+    ];
+
+    // Create heatmap overlay for 2D map with <2.5% transparency
+    const createHeatmapOverlay = () => {
+      // Leaflet's default CRS is WebMercator, which distorts latitude spacing near the poles.
+      // We pre-project our raster into Mercator space so the overlay lines up with the basemap.
+      const mercatorProject = (latDeg: number) => {
+        const clamped = Math.min(85, Math.max(-85, latDeg));
+        const latRad = (clamped * Math.PI) / 180;
+        return Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+      };
+
+      const mercatorUnproject = (value: number) => {
+        return (2 * Math.atan(Math.exp(value)) - Math.PI / 2) * (180 / Math.PI);
+      };
+
+      const mercatorMin = mercatorProject(renderMinLat);
+      const mercatorMax = mercatorProject(renderMaxLat);
+
+      const canvas = document.createElement('canvas');
+      // Use 2:1 aspect ratio for equirectangular projection (360° lon : 180° lat)
+      canvas.width = 2048;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      const imageData = ctx.createImageData(canvas.width, canvas.height);
+      const dataArr = imageData.data;
+
+      // Render each pixel
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          // Map canvas pixel to lon (linear) and Mercator-adjusted lat
+          const lon = (x / canvas.width) * 360 - 180;
+          const t = y / (canvas.height - 1);
+          const mercatorValue = mercatorMax + (mercatorMin - mercatorMax) * t;
+          const lat = mercatorUnproject(mercatorValue);
+
+          // Clamp to dataset bounds before sampling grid indices
+          const clampedLat = Math.min(datasetMaxLat, Math.max(datasetMinLat, lat));
+          const clampedLon = Math.min(datasetMaxLon, Math.max(datasetMinLon, lon));
+
+          // Map to grid
+          const gridY = ((clampedLat - datasetMinLat) / latSpan) * (lat_range.length - 1);
+          const gridX = ((clampedLon - datasetMinLon) / lonSpan) * (lon_range.length - 1);
+
+          const yi = Math.floor(gridY);
+          const xi = Math.floor(gridX);
+
+          if (yi >= 0 && yi < prob_grid.length && xi >= 0 && xi < prob_grid[yi].length) {
+            const probability = prob_grid[yi][xi] || 0;
+            const normalizedProb = Math.min(probability / statistics.max_probability, 1);
+
+            // Only show colors if probability >= 2.5%
+            if (normalizedProb >= 0.025) {
+              const pixelIndex = (y * canvas.width + x) * 4;
+              dataArr[pixelIndex] = 255; // R
+              dataArr[pixelIndex + 1] = Math.round(255 * Math.pow(1 - normalizedProb * 0.85, 1.2)); // G
+              dataArr[pixelIndex + 2] = Math.round(30 * Math.pow(1 - normalizedProb, 2)); // B
+              dataArr[pixelIndex + 3] = Math.round((0.15 + 0.35 * Math.pow(normalizedProb, 0.8)) * 255); // A
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      return canvas.toDataURL('image/png');
+    };
+
+    const heatmapUrl = createHeatmapOverlay();
+
+    // Handle map click to show probability
+    const handleMapClick = (lat: number, lon: number) => {
+      // Clamp latitude to valid range
+        const clampedLat = Math.min(datasetMaxLat, Math.max(datasetMinLat, lat));
+        const clampedLon = Math.min(datasetMaxLon, Math.max(datasetMinLon, lon));
+      
+      // Get probability from grid
+    const gridY = ((clampedLat - datasetMinLat) / latSpan) * (lat_range.length - 1);
+    const gridX = ((clampedLon - datasetMinLon) / lonSpan) * (lon_range.length - 1);
+
+      const yi = Math.round(gridY);
+      const xi = Math.round(gridX);
+
+      if (yi >= 0 && yi < prob_grid.length && xi >= 0 && xi < prob_grid[yi].length) {
+        const probability = prob_grid[yi][xi] || 0;
+        const percentage = ((probability / statistics.max_probability) * 100).toFixed(2);
+
+        setClickInfo({
+          lat: clampedLat,
+           lon: clampedLon,
+          probability,
+          percentage
+        });
+      }
+    };
+
+  return <LeafletMap heatmapUrl={heatmapUrl} onMapClick={handleMapClick} bounds={renderBounds} />;
+  };
+
   return (
     <>
+      {/* 3D Globe - only visible when in 3D mode */}
       <div 
         ref={cesiumContainer} 
         className="absolute inset-0 w-full h-full"
-        style={{ background: 'black' }}
+        style={{ 
+          background: 'black',
+          display: viewMode === '3d' ? 'block' : 'none' // Hide when in 2D mode
+        }}
       />
+      
+      {/* 2D Map - only visible when in 2D mode */}
+      {viewMode === '2d' && render2DMap()}
+
+      {/* View mode toggle buttons - positioned to be visible next to sidebar */}
+  <div className="absolute top-4 left-[340px] flex gap-2" style={{ zIndex: 1300 }}>
+        <button
+          onClick={() => setViewMode('3d')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            viewMode === '3d'
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'bg-gray-800/80 text-gray-300 hover:bg-gray-700/80 backdrop-blur-sm'
+          }`}
+        >
+          3D Globe
+        </button>
+        <button
+          onClick={() => setViewMode('2d')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            viewMode === '2d'
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'bg-gray-800/80 text-gray-300 hover:bg-gray-700/80 backdrop-blur-sm'
+          }`}
+        >
+          2D Map
+        </button>
+      </div>
       
       {/* Click info display */}
       {clickInfo && (
-        <div className="absolute top-4 right-4 bg-black/80 text-white p-4 rounded-lg shadow-lg backdrop-blur-sm border border-white/20">
+  <div className="absolute top-4 right-4 bg-black/80 text-white p-4 rounded-lg shadow-lg backdrop-blur-sm border border-white/20" style={{ zIndex: 1300 }}>
           <h3 className="font-bold text-lg mb-2">Shark Attack Risk</h3>
           <div className="space-y-1 text-sm">
             <p><span className="text-gray-400">Latitude:</span> {clickInfo.lat.toFixed(4)}°</p>
