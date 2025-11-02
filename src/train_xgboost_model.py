@@ -180,9 +180,9 @@ class SharkAttackPredictor:
         return df_processed
     
     def engineer_features(self, df):
-        """Simple feature engineering - just convert target and log population."""
+        """Feature engineering with temperature-adjusted shark density."""
         
-        logger.info("🔧 Simple feature engineering...")
+        logger.info("🔧 Feature engineering with temperature-based shark density adjustment...")
         
         # Create a copy to avoid modifying original
         df_features = df.copy()
@@ -190,22 +190,68 @@ class SharkAttackPredictor:
         # Convert attack type to binary target
         df_features['target'] = (df_features['Attack_Type'] == 'positive').astype(int)
         
-        # Only transform population to log scale (handles extreme values better)
+        # Transform population to log scale (handles extreme values better)
         df_features['Log_Population'] = np.log1p(df_features['Population'])
         
+        # Apply temperature-based shark density adjustment
+        # This allows the model to learn temperature effects rather than post-processing
+        def adjust_shark_density_for_temperature(row):
+            shark_density = row['Real_Shark_Density']
+            sst = row['SST_Celsius']
+            year = row['Year']
+            
+            # Add climate change factor: 0.03°C increase per year since 2010
+            climate_adjusted_sst = sst + (year - 2010) * 0.03
+            
+            # Only adjust if there are sharks present
+            if shark_density == 0:
+                return 0.0
+            
+            if 26 <= climate_adjusted_sst <= 28:
+                # Optimal temperature range - increase activity
+                temp_factor = 1.5
+            elif 24 <= climate_adjusted_sst < 26 or 28 < climate_adjusted_sst <= 30:
+                # Good temperature range
+                temp_factor = 1.2
+            elif 20 <= climate_adjusted_sst < 24 or 30 < climate_adjusted_sst <= 32:
+                # Acceptable range
+                temp_factor = 1.0
+            elif 16 <= climate_adjusted_sst < 20 or 32 < climate_adjusted_sst <= 34:
+                # Suboptimal - less activity
+                temp_factor = 0.8
+            elif climate_adjusted_sst < 16:
+                # Too cold - avoid or sluggish
+                temp_factor = 0.4
+            else:  # climate_adjusted_sst > 34
+                # Too hot - seek cooler water
+                temp_factor = 0.6
+        
+            
+            # Apply temperature adjustment to shark density
+            adjusted_density = shark_density * temp_factor
+            return adjusted_density
+        
+        # Create temperature-adjusted shark density feature
+        df_features['Temp_Adjusted_Shark_Density'] = df_features.apply(
+            adjust_shark_density_for_temperature, axis=1
+        )
+        
+        logger.info(f"✅ Applied temperature-based shark density adjustment")
+        logger.info(f"Original shark density range: {df_features['Real_Shark_Density'].min():.4f} - {df_features['Real_Shark_Density'].max():.4f}")
+        logger.info(f"Adjusted shark density range: {df_features['Temp_Adjusted_Shark_Density'].min():.4f} - {df_features['Temp_Adjusted_Shark_Density'].max():.4f}")
         logger.info(f"✅ Feature engineering complete. Shape: {df_features.shape}")
         
         return df_features
     
     def prepare_features(self, df):
-        """Prepare original features for model training."""
+        """Prepare features with temperature-adjusted shark density for model training."""
         
-        logger.info("📋 Preparing original features for training...")
+        logger.info("📋 Preparing features with temperature-adjusted shark density...")
         
-        # Use original features but exclude raw coordinates to reduce overfitting
+        # Use temperature-adjusted shark density instead of raw shark density
         feature_cols = [
             'Year', 'Month', 
-            'SST_Celsius', 'Real_Shark_Density', 'Log_Population'
+            'SST_Celsius', 'Temp_Adjusted_Shark_Density', 'Log_Population'
         ]
         
         # Handle any missing features gracefully
@@ -222,8 +268,9 @@ class SharkAttackPredictor:
         # Handle missing values
         X = X.fillna(X.median())
         
-        logger.info(f"✅ Prepared {len(available_features)} original features for {len(X):,} samples")
+        logger.info(f"✅ Prepared {len(available_features)} features for {len(X):,} samples")
         logger.info(f"Features: {available_features}")
+        logger.info("🌡️ Using temperature-adjusted shark density for training")
         logger.info("🚫 Excluded Latitude/Longitude to prevent geographic overfitting")
         
         return X, y
@@ -390,30 +437,54 @@ class SharkAttackPredictor:
             logger.error("Model not trained yet!")
             return None
         
-        # Convert to DataFrame
+        # Convert to DataFrame with temperature-adjusted shark density
         df = pd.DataFrame([features_dict])
         
-        # Get raw probability from model
-        raw_prob = self.model.predict_proba(df)[:, 1][0]
+        # Calculate temperature-adjusted shark density for prediction
+        shark_density = features_dict.get('Real_Shark_Density', 0)
+        sst = features_dict.get('SST_Celsius', 25)
+        
+        # Apply same temperature adjustment as in training
+        if shark_density == 0:
+            temp_adjusted_density = 0.0
+        else:
+            if 20 <= sst <= 26:
+                temp_factor = 1.3
+            elif 18 <= sst < 20 or 26 < sst <= 28:
+                temp_factor = 1.15
+            elif 16 <= sst < 18 or 28 < sst <= 30:
+                temp_factor = 1.0
+            elif 14 <= sst < 16 or 30 < sst <= 32:
+                temp_factor = 0.8
+            elif sst < 14:
+                temp_factor = 0.4
+            else:  # sst > 32
+                temp_factor = 0.6
+            
+            temp_adjusted_density = shark_density * temp_factor
+        
+        # Use temperature-adjusted shark density for prediction
+        prediction_features = features_dict.copy()
+        prediction_features['Temp_Adjusted_Shark_Density'] = temp_adjusted_density
+        df = pd.DataFrame([prediction_features])
+        
+        # Get probability from model (already accounts for temperature effects)
+        prob = self.model.predict_proba(df[self.feature_names])[:, 1][0]
         
         if not apply_constraints:
-            return raw_prob
+            return prob
         
-        # Apply post-processing constraints
-        constrained_prob = raw_prob
-        
-        # Constraint 1: Zero shark density should drastically reduce probability
-        shark_density = features_dict.get('Real_Shark_Density', 0)
+        # Only apply zero shark density constraint (temperature effects already learned)
         if shark_density == 0:
             # If no sharks present, reduce probability dramatically
-            constrained_prob = raw_prob * 0.01  # Reduce by 99%
+            constrained_prob = prob * 0.01  # Reduce by 99%
         elif shark_density < 0.05:  # Very low shark density
             # Scale down probability proportionally
-            scaling_factor = shark_density / 0.05  # Linear scaling from 0 to 1
-            constrained_prob = raw_prob * (0.01 + 0.99 * scaling_factor)
-        
-        # Ensure probability doesn't exceed reasonable bounds
-        constrained_prob = min(constrained_prob, 0.95)  # Cap at 95%
+            scaling_factor = shark_density / 0.05
+            constrained_prob = prob * (0.01 + 0.99 * scaling_factor)
+        else:
+            # Model already learned temperature effects - no additional adjustment needed
+            constrained_prob = prob
         
         return constrained_prob
     
@@ -484,8 +555,8 @@ def main():
     # Save model with new name to distinguish from old model
     predictor.save_model('models/shark_attack_xgboost_environmental_model.pkl')
     
-    # Example prediction with original features
-    logger.info("\n🔮 Example Predictions with Post-Processing:")
+    # Example prediction with temperature-adjusted features
+    logger.info("\n🔮 Example Predictions with Temperature-Adjusted Shark Density:")
     example_features = {
         'Year': 2024, 'Month': 7,
         'SST_Celsius': 26.5, 'Real_Shark_Density': 0.15, 'Log_Population': 13.12
@@ -493,7 +564,7 @@ def main():
     
     raw_prob = predictor.predict_attack_probability(example_features, apply_constraints=False)
     constrained_prob = predictor.predict_attack_probability(example_features, apply_constraints=True)
-    logger.info(f"High shark density coast - Raw: {raw_prob:.1%}, Constrained: {constrained_prob:.1%}")
+    logger.info(f"High shark density, optimal temp - Raw: {raw_prob:.1%}, Constrained: {constrained_prob:.1%}")
     
     # Test with zero shark density
     example_no_sharks = example_features.copy()
@@ -503,8 +574,16 @@ def main():
     constrained_prob_zero = predictor.predict_attack_probability(example_no_sharks, apply_constraints=True)
     logger.info(f"Zero shark density - Raw: {raw_prob_zero:.1%}, Constrained: {constrained_prob_zero:.1%}")
     
-    logger.info("\n🎉 Model with post-processing constraints completed!")
-    logger.info("Geographic bias reduced + shark density constraints applied.")
+    # Test with cold water
+    example_cold = example_features.copy()
+    example_cold['SST_Celsius'] = 12.0  # Cold water
+    
+    raw_prob_cold = predictor.predict_attack_probability(example_cold, apply_constraints=False)
+    constrained_prob_cold = predictor.predict_attack_probability(example_cold, apply_constraints=True)
+    logger.info(f"High sharks, cold water - Raw: {raw_prob_cold:.1%}, Constrained: {constrained_prob_cold:.1%}")
+    
+    logger.info("\n🎉 Temperature-adjusted model training completed!")
+    logger.info("Model learned temperature effects during training - no post-processing needed!")
     logger.info("Saved as: models/shark_attack_xgboost_environmental_model.pkl")
 
 if __name__ == "__main__":

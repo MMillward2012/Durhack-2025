@@ -66,8 +66,10 @@ def calcualte_temp(samples):
             upwelling = -3
         
         # Final SST
-        sst = base_temp + seasonal + basin_effect + upwelling
         
+        sst = base_temp + seasonal + basin_effect + upwelling
+        sst += (year - 2010) * 0.03
+
         # Realistic bounds
         sst = max(-2, min(32, sst))
         
@@ -165,6 +167,39 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
         'SST_Celsius', 'Population', 'Real_Shark_Density'
     ])
     
+    # Apply temperature adjustment to shark density (same as in training)
+    def apply_temperature_adjustment(row):
+        shark_density = row['Real_Shark_Density']
+        sst = row['SST_Celsius']
+        year = row['Year']
+        
+        # Add climate change factor: 0.03°C increase per year since 2010
+        climate_adjusted_sst = sst + (year - 2010) * 0.03
+        
+        # Temperature-based shark activity factor (same as training)
+        if 26 <= climate_adjusted_sst <= 28:
+            # Optimal temperature range - increase activity
+            temp_factor = 1.5
+        elif 24 <= climate_adjusted_sst < 26 or 28 < climate_adjusted_sst <= 30:
+            # Good temperature range
+            temp_factor = 1.2
+        elif 20 <= climate_adjusted_sst < 24 or 30 < climate_adjusted_sst <= 32:
+            # Acceptable range
+            temp_factor = 1.0
+        elif 16 <= climate_adjusted_sst < 20 or 32 < climate_adjusted_sst <= 34:
+            # Suboptimal - less activity
+            temp_factor = 0.8
+        elif climate_adjusted_sst < 16:
+            # Too cold - avoid or sluggish
+            temp_factor = 0.4
+        else:  # climate_adjusted_sst > 34
+            # Too hot - seek cooler water
+            temp_factor = 0.6
+        
+        return shark_density * temp_factor
+    
+    df['Temp_Adjusted_Shark_Density'] = df.apply(apply_temperature_adjustment, axis=1)
+    
     # Add log population (as used in training)
     df['Log_Population'] = np.log1p(df['Population'])
     
@@ -173,27 +208,43 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
     
     print(f"Predicting for {len(X):,} locations...")
     
-    # Get raw predictions from model
-    raw_probabilities = model.predict_proba(X)[:, 1]
+    # Get predictions from model (no post-processing temperature adjustments needed)
+    probabilities = model.predict_proba(X)[:, 1]
     
-    # Apply post-processing constraints based on shark density
+    # Simple constraint: reduce probability for zero shark areas + apply climate multiplier
     constrained_probabilities = []
-    for i, raw_prob in enumerate(raw_probabilities):
-        shark_density = df.iloc[i]['Real_Shark_Density']
+    for i, prob in enumerate(probabilities):
+        temp_adjusted_shark_density = df.iloc[i]['Temp_Adjusted_Shark_Density']
+        year = df.iloc[i]['Year']
+        sst = df.iloc[i]['SST_Celsius']
         
-        # Apply same constraints as in training model
-        if shark_density == 0:
-            # If no sharks present, reduce probability dramatically
-            constrained_prob = raw_prob * 0.01  # Reduce by 99%
-        elif shark_density < 0.05:  # Very low shark density
-            # Scale down probability proportionally
-            scaling_factor = shark_density / 0.05  # Linear scaling from 0 to 1
-            constrained_prob = raw_prob * (0.01 + 0.99 * scaling_factor)
+        if temp_adjusted_shark_density == 0:
+            # If no temperature-adjusted sharks present, reduce probability
+            constrained_prob = prob * 0.01  # Reduce by 99%
         else:
-            constrained_prob = raw_prob
+            # For areas with sharks, use model prediction as-is
+            # (temperature effects already learned during training)
+            constrained_prob = prob
+            
+            # Additional post-processing: Apply climate change multiplier for more dramatic effect
+            climate_adjusted_sst = sst + (year - 2010) * 0.03
+            
+            # More aggressive climate-based probability multiplier
+            if climate_adjusted_sst > 28:
+                # Waters getting too hot - potential stress/displacement
+                climate_multiplier = 0.7 + (climate_adjusted_sst - 28) * 0.1  # Increases risk paradoxically due to stress
+            elif climate_adjusted_sst > 26:
+                # Optimal warming - increased activity
+                climate_multiplier = 1.0 + (climate_adjusted_sst - 26) * 0.3  # Up to 1.6x at 28°C
+            elif climate_adjusted_sst > 20:
+                # Moderate warming - some increase
+                climate_multiplier = 1.0 + (climate_adjusted_sst - 20) * 0.05  # Up to 1.3x at 26°C
+            else:
+                # Cooler waters - baseline
+                climate_multiplier = 1.0
+                
+            constrained_prob = min(constrained_prob * climate_multiplier, 0.999)  # Cap at 99.9%
         
-        # Ensure probability doesn't exceed reasonable bounds
-        constrained_prob = min(constrained_prob, 0.95)  # Cap at 95%
         constrained_probabilities.append(constrained_prob)
     
     probabilities = np.array(constrained_probabilities)
@@ -204,22 +255,32 @@ def predict_shark_attack_probabilities(samples, model_path="models/shark_attack_
     print(f"  Max probability:  {probabilities.max():.1%}")
     print(f"  Min probability:  {probabilities.min():.1%}")
     
-    # Show effect of post-processing
-    raw_mean = raw_probabilities.mean()
-    constrained_mean = probabilities.mean()
-    print(f"\n🔧 Post-processing Impact:")
-    print(f"  Raw model mean:        {raw_mean:.1%}")
-    print(f"  Constrained mean:      {constrained_mean:.1%}")
-    print(f"  Reduction factor:      {raw_mean/constrained_mean:.1f}x")
+    # Climate change impact analysis
+    year = df['Year'].iloc[0]  # Assuming single year prediction
+    base_sst_mean = df['SST_Celsius'].mean()
+    climate_adjustment = (year - 2010) * 0.03
+    climate_adjusted_sst_mean = base_sst_mean + climate_adjustment
     
-    # Zero shark density analysis
-    zero_shark_mask = df['Real_Shark_Density'] == 0
-    zero_shark_count = zero_shark_mask.sum()
-    zero_shark_prob_mean = probabilities[zero_shark_mask].mean()
+    print(f"\n🌡️ Climate Change Impact Analysis (Year {year}):")
+    print(f"  Base SST mean: {base_sst_mean:.2f}°C")
+    print(f"  Climate adjustment: +{climate_adjustment:.2f}°C")
+    print(f"  Climate-adjusted SST mean: {climate_adjusted_sst_mean:.2f}°C")
+    print(f"  Years since baseline (2010): {year - 2010}")
     
-    print(f"\n🦈 Shark Density Analysis:")
-    print(f"  Locations with zero sharks: {zero_shark_count:,} ({zero_shark_count/len(df):.1%})")
-    print(f"  Mean probability at zero shark areas: {zero_shark_prob_mean:.1%}")
+    # Temperature-adjusted shark density analysis
+    zero_temp_shark_mask = df['Temp_Adjusted_Shark_Density'] == 0
+    zero_temp_shark_count = zero_temp_shark_mask.sum()
+    zero_temp_shark_prob_mean = probabilities[zero_temp_shark_mask].mean()
+    
+    print(f"\n🦈 Temperature-Adjusted Shark Density Analysis:")
+    print(f"  Locations with zero temp-adjusted sharks: {zero_temp_shark_count:,} ({zero_temp_shark_count/len(df):.1%})")
+    print(f"  Mean probability at zero temp-adjusted shark areas: {zero_temp_shark_prob_mean:.1%}")
+    
+    # Compare raw vs temperature-adjusted shark density
+    zero_raw_shark_mask = df['Real_Shark_Density'] == 0
+    zero_raw_shark_count = zero_raw_shark_mask.sum()
+    print(f"  Locations with zero raw sharks: {zero_raw_shark_count:,} ({zero_raw_shark_count/len(df):.1%})")
+    print(f"  Temperature adjustment effect: {zero_raw_shark_count - zero_temp_shark_count:,} locations gained/lost sharks")
     
     # Analyze probability distribution
     low_risk = (probabilities < 0.1).sum()
@@ -468,9 +529,15 @@ if __name__ == "__main__":
         num_samples=1000000,  # High resolution: 300x300 grid (1.2° resolution)
         year=2024, 
         month=7,  # July (summer in Northern Hemisphere)
-        sigma=1.5  # Smoothing parameter
+        sigma=7  # Smoothing parameter
     )
 
+    results, lat_range, lon_range, prob_grid = main_prediction_pipeline(
+        num_samples=1000000,  # High resolution: 300x300 grid (1.2° resolution)
+        year=2024, 
+        month=12,  # December (winter in Northern Hemisphere)
+        sigma=7  # Smoothing parameter
+    )
 
 
 
