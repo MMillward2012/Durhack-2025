@@ -331,7 +331,7 @@ def generate_risk_summary(results, year, month):
     for i, (lat, lon, prob) in enumerate(sorted_results[:5], 1):
         print(f"  {i}. Lat: {lat:6.2f}°, Lon: {lon:7.2f}° - Risk: {prob:.1%}")
 
-def generate_webapp_data_for_date(year, month, num_samples=40000, sigma=2.0):
+def generate_webapp_data_for_date(year, month, num_samples=200000, sigma=2.0):
     """Generate and save data for a specific date for webapp usage."""
     print(f"\n🌍 GENERATING WEBAPP DATA FOR {year}/{month:02d}")
     print("=" * 60)
@@ -429,24 +429,40 @@ def generate_webapp_data_for_date(year, month, num_samples=40000, sigma=2.0):
     return webapp_data
 
 if __name__ == "__main__":
-    # Generate data for a few sample dates first
-    print("🚀 GENERATING SAMPLE WEBAPP DATA")
-    print("=" * 60)
+    # Generate comprehensive monthly data for 2023-2025 for DurHack presentation
+    print("🚀 GENERATING HIGH-QUALITY WEBAPP DATA (1M samples each)")
+    print("=" * 80)
     
-    # Generate a few sample dates for testing
-    sample_dates = [
-        (2020, 1),   # January 2020
-        (2022, 7),   # July 2022  
-        (2024, 12)   # December 2024
-    ]
+    # Generate monthly data for 2023-2025 (36 months total)
+    all_dates = []
     
-    for year, month in sample_dates:
+    # Add all months for each year
+    for year in [2023, 2024, 2025]:
+        for month in range(1, 13):  # Months 1-12
+            all_dates.append((year, month))
+    
+    print(f"📅 Will generate {len(all_dates)} files with 1M samples each")
+    print(f"🎯 Total predictions: {len(all_dates) * 1000000:,}")
+    print("⏱️  Estimated time: 30-45 minutes")
+    print()
+    
+    successful = 0
+    failed = 0
+    
+    for i, (year, month) in enumerate(all_dates, 1):
         try:
-            data = generate_webapp_data_for_date(year, month)
+            print(f"\n📊 Processing {i}/{len(all_dates)}: {year}-{month:02d}")
+            data = generate_webapp_data_for_date(year, month, num_samples=1000000)
             print(f"✅ Successfully generated data for {year}/{month:02d}")
+            successful += 1
         except Exception as e:
             print(f"❌ Error generating data for {year}/{month:02d}: {e}")
+            failed += 1
     
-    print(f"\n🎉 Sample data generation complete!")
-    print(f"📁 Check public/data/ folder for JSON files")
-    print(f"🌐 Ready to build React webapp!")
+    print(f"\n🎉 DATA GENERATION COMPLETE!")
+    print("=" * 80)
+    print(f"✅ Successful: {successful} files")
+    print(f"❌ Failed: {failed} files")
+    print(f"📁 Check public/data/ folder for high-quality JSON files")
+    print(f"🌐 Ready for DurHack presentation!")
+    print(f"🔥 Each file contains 1 million prediction points for maximum detail")

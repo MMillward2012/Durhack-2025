@@ -54,22 +54,51 @@ interface HeatmapData {
 }
 
 const AVAILABLE_DATES = [
-  { year: 2020, month: 1, label: 'Jan 2020', season: 'Winter' },
-  { year: 2020, month: 6, label: 'Jun 2020', season: 'Summer' },
-  { year: 2020, month: 12, label: 'Dec 2020', season: 'Winter' },
-  { year: 2021, month: 6, label: 'Jun 2021', season: 'Summer' },
-  { year: 2021, month: 12, label: 'Dec 2021', season: 'Winter' },
-  { year: 2022, month: 6, label: 'Jun 2022', season: 'Summer' },
-  { year: 2022, month: 7, label: 'Jul 2022', season: 'Summer' },
-  { year: 2022, month: 12, label: 'Dec 2022', season: 'Winter' },
+  // 2023 - Full year monthly data
+  { year: 2023, month: 1, label: 'Jan 2023', season: 'Winter' },
+  { year: 2023, month: 2, label: 'Feb 2023', season: 'Winter' },
+  { year: 2023, month: 3, label: 'Mar 2023', season: 'Spring' },
+  { year: 2023, month: 4, label: 'Apr 2023', season: 'Spring' },
+  { year: 2023, month: 5, label: 'May 2023', season: 'Spring' },
   { year: 2023, month: 6, label: 'Jun 2023', season: 'Summer' },
+  { year: 2023, month: 7, label: 'Jul 2023', season: 'Summer' },
+  { year: 2023, month: 8, label: 'Aug 2023', season: 'Summer' },
+  { year: 2023, month: 9, label: 'Sep 2023', season: 'Fall' },
+  { year: 2023, month: 10, label: 'Oct 2023', season: 'Fall' },
+  { year: 2023, month: 11, label: 'Nov 2023', season: 'Fall' },
   { year: 2023, month: 12, label: 'Dec 2023', season: 'Winter' },
+  
+  // 2024 - Full year monthly data
+  { year: 2024, month: 1, label: 'Jan 2024', season: 'Winter' },
+  { year: 2024, month: 2, label: 'Feb 2024', season: 'Winter' },
+  { year: 2024, month: 3, label: 'Mar 2024', season: 'Spring' },
+  { year: 2024, month: 4, label: 'Apr 2024', season: 'Spring' },
+  { year: 2024, month: 5, label: 'May 2024', season: 'Spring' },
   { year: 2024, month: 6, label: 'Jun 2024', season: 'Summer' },
+  { year: 2024, month: 7, label: 'Jul 2024', season: 'Summer' },
+  { year: 2024, month: 8, label: 'Aug 2024', season: 'Summer' },
+  { year: 2024, month: 9, label: 'Sep 2024', season: 'Fall' },
+  { year: 2024, month: 10, label: 'Oct 2024', season: 'Fall' },
+  { year: 2024, month: 11, label: 'Nov 2024', season: 'Fall' },
   { year: 2024, month: 12, label: 'Dec 2024', season: 'Winter' },
+  
+  // 2025 - Full year monthly data
+  { year: 2025, month: 1, label: 'Jan 2025', season: 'Winter' },
+  { year: 2025, month: 2, label: 'Feb 2025', season: 'Winter' },
+  { year: 2025, month: 3, label: 'Mar 2025', season: 'Spring' },
+  { year: 2025, month: 4, label: 'Apr 2025', season: 'Spring' },
+  { year: 2025, month: 5, label: 'May 2025', season: 'Spring' },
+  { year: 2025, month: 6, label: 'Jun 2025', season: 'Summer' },
+  { year: 2025, month: 7, label: 'Jul 2025', season: 'Summer' },
+  { year: 2025, month: 8, label: 'Aug 2025', season: 'Summer' },
+  { year: 2025, month: 9, label: 'Sep 2025', season: 'Fall' },
+  { year: 2025, month: 10, label: 'Oct 2025', season: 'Fall' },
+  { year: 2025, month: 11, label: 'Nov 2025', season: 'Fall' },
+  { year: 2025, month: 12, label: 'Dec 2025', season: 'Winter' },
 ];
 
 export default function Home() {
-  const [selectedDate, setSelectedDate] = useState(AVAILABLE_DATES[10]); // Start with 2024 June to show climate impact
+  const [selectedDate, setSelectedDate] = useState(AVAILABLE_DATES[30]); // Start with Jul 2025 to show latest climate impact
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
