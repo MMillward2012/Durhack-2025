@@ -4,6 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import TimelinePlayer from './components/TimelinePlayer';
+import ColorLegend from './components/ColorLegend';
 
 // Dynamically import the Globe component to avoid SSR issues with Cesium
 const Globe = dynamic(
@@ -11,7 +12,7 @@ const Globe = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[600px] bg-gradient-to-br from-slate-900 to-black rounded-lg flex items-center justify-center">
+      <div className="w-full h-[600px] bg-linear-to-br from-slate-900 to-black rounded-lg flex items-center justify-center">
         <div className="text-blue-400 animate-pulse">Loading 3D Globe...</div>
       </div>
     ),
@@ -122,29 +123,30 @@ export default function Home() {
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-black">
       {/* Transparent Left Sidebar Area */}
-      <div className="w-96 relative z-10 flex flex-col">
+      <div className="w-80 relative z-10 flex flex-col">
         
         {/* Single Dark Card - 90% screen height */}
-        <div className="mx-6 my-[5vh] h-[90vh] bg-gray-950/95 backdrop-blur-xl rounded-3xl border border-gray-800/40 shadow-2xl flex flex-col">
+        <div className="mx-6 my-[5vh] h-[90vh] rounded-3xl shadow-2xl flex flex-col" style={{ backgroundColor: 'rgb(44,44,44)' }}>
           
           {/* Header */}
-          <div className="px-8 py-8 border-b border-gray-800/30">
-            <h1 className="text-3xl font-light text-white mb-2">
+          <div className="px-6 py-6 border-b border-gray-600">
+            <h1 className="text-2xl font-light text-white mb-1">
               Shark Risk Analysis
             </h1>
-            <p className="text-sm text-gray-400 font-light">
+            <p className="text-xs text-gray-300 font-light">
               Climate-adjusted global predictions
             </p>
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             
             {/* Timeline Player */}
             <div>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4">
-                Timeline
-              </h3>
+              <div className="flex items-center space-x-2 mb-2">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Timeline:</h3>
+                <span className="text-lg font-light text-white">{selectedDate.label}</span>
+              </div>
               <TimelinePlayer 
                 dates={AVAILABLE_DATES}
                 currentDate={selectedDate}
@@ -152,53 +154,46 @@ export default function Home() {
               />
             </div>
 
+            {/* Color Legend */}
+            <div>
+              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
+                Risk Scale
+              </h3>
+              <ColorLegend />
+            </div>
+
             {/* Statistics Grid */}
             {heatmapData && !isLoading && (
               <>
                 <div>
-                  <h3 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4">
+                  <h3 className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
                     Key Metrics
                   </h3>
-                  <div className="space-y-4">
-                    <div className="bg-gray-900/60 rounded-2xl p-6 border border-gray-800/50">
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Peak Risk</p>
-                          <p className="text-white text-2xl font-extralight mt-1">
-                            {(heatmapData.statistics.max_probability * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                        <div className="text-gray-700 text-right">
-                          <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                        </div>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between py-1">
+                      <div>
+                        <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">Peak Risk</p>
+                        <p className="text-white text-xl font-extralight">
+                          {(heatmapData.statistics.max_probability * 100).toFixed(1)}%
+                        </p>
                       </div>
                     </div>
                     
-                    <div className="bg-gray-900/60 rounded-2xl p-6 border border-gray-800/50">
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Average Risk</p>
-                          <p className="text-white text-2xl font-extralight mt-1">
-                            {(heatmapData.statistics.mean_probability * 100).toFixed(2)}%
-                          </p>
-                        </div>
-                        <div className="text-gray-700 text-right">
-                          <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                        </div>
+                    <div className="flex items-baseline justify-between py-1">
+                      <div>
+                        <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">Average Risk</p>
+                        <p className="text-white text-xl font-extralight">
+                          {(heatmapData.statistics.mean_probability * 100).toFixed(2)}%
+                        </p>
                       </div>
                     </div>
                     
-                    <div className="bg-gray-900/60 rounded-2xl p-6 border border-gray-800/50">
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">High Risk Zones</p>
-                          <p className="text-white text-2xl font-extralight mt-1">
-                            {heatmapData.statistics.high_risk_count}
-                          </p>
-                        </div>
-                        <div className="text-gray-700 text-right">
-                          <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                        </div>
+                    <div className="flex items-baseline justify-between py-1">
+                      <div>
+                        <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">High Risk Zones</p>
+                        <p className="text-white text-xl font-extralight">
+                          {heatmapData.statistics.high_risk_count}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -206,25 +201,25 @@ export default function Home() {
 
                 {/* Climate Section */}
                 <div>
-                  <h3 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4">
+                  <h3 className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
                     Climate Data
                   </h3>
-                  <div className="bg-gray-900/60 rounded-2xl p-6 border border-gray-800/50 space-y-5">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-gray-400 text-sm">Temperature Increase</span>
-                      <span className="text-white font-light">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-baseline py-1">
+                      <span className="text-gray-300 text-xs">Temperature Increase</span>
+                      <span className="text-white font-light text-sm">
                         +{heatmapData.climate_info.climate_adjustment.toFixed(2)}°C
                       </span>
                     </div>
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-gray-400 text-sm">Data Points</span>
-                      <span className="text-white font-light">
+                    <div className="flex justify-between items-baseline py-1">
+                      <span className="text-gray-300 text-xs">Data Points</span>
+                      <span className="text-white font-light text-sm">
                         {heatmapData.statistics.total_locations.toLocaleString()}
                       </span>
                     </div>
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-gray-400 text-sm">Years Since Baseline</span>
-                      <span className="text-white font-light">
+                    <div className="flex justify-between items-baseline py-1">
+                      <span className="text-gray-300 text-xs">Years Since Baseline</span>
+                      <span className="text-white font-light text-sm">
                         {heatmapData.climate_info.years_since_baseline}
                       </span>
                     </div>
@@ -233,9 +228,12 @@ export default function Home() {
 
                 {/* Model Info */}
                 <div>
-                  <div className="bg-gray-900/40 rounded-2xl p-6 border border-gray-800/30">
-                    <p className="text-white font-light text-sm mb-3">Climate Scaling Model</p>
-                    <p className="text-gray-400 text-xs leading-relaxed font-light">
+                  <h3 className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
+                    Model Information
+                  </h3>
+                  <div>
+                    <p className="text-white font-light text-sm mb-2">Climate Scaling Model</p>
+                    <p className="text-gray-300 text-xs leading-relaxed font-light">
                       Temperature-based probability adjustments account for changing ocean conditions. 
                       Warmer waters correlate with increased shark activity patterns.
                     </p>
@@ -246,8 +244,8 @@ export default function Home() {
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-6 border-t border-gray-800/30">
-            <p className="text-xs text-gray-600 text-center font-light tracking-wide">
+          <div className="px-6 py-4 border-t border-gray-600">
+            <p className="text-xs text-gray-500 text-center font-light tracking-wide">
               DURHACK 2025
             </p>
           </div>
@@ -255,7 +253,7 @@ export default function Home() {
       </div>
 
       {/* Full-Screen Globe - Shifted Left */}
-      <div className="flex-1 relative -ml-24">
+      <div className="flex-1 relative -ml-16">
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-slate-400 animate-pulse text-lg">Loading 3D Globe...</div>

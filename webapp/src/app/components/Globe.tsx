@@ -45,52 +45,29 @@ interface GlobeProps {
   data: HeatmapData | null;
 }
 
-const getHeatmapColorString = (probability: number, _maxProbability: number): string | null => {
+const getHeatmapColorString = (probability: number, maxProbability: number): string | null => {
   if (!probability || probability <= 0.001) return null;
 
-  // Use a reasonable threshold similar to the original
-  const minThreshold = 0.02; // 2% minimum threshold
-  if (probability < minThreshold) {
-    return null; // Hide low probability areas to keep Earth visible
-  }
+  // Continuous normalization - no discrete bands!
+  const normalizedProb = Math.min(probability / maxProbability, 1);
   
-  // Map probability 2%-100% to the YlOrRd colormap (like matplotlib)
-  const normalizedProb = Math.min((probability - minThreshold) / (1 - minThreshold), 1);
+  // Only show colors for significant probabilities (reduced from 5% to 0.5%)
+  if (normalizedProb < 0.015) return null; // Skip very low probability areas
   
-  // Implement matplotlib's YlOrRd colormap colors
-  let r, g, b, alpha;
+  // Smooth heat map colors: light yellow -> orange -> red
+  // Red channel: always high
+  const r = 255;
   
-  if (normalizedProb < 0.25) {
-    // Light yellow to yellow (like YlOrRd start)
-    const t = normalizedProb / 0.25;
-    r = Math.round(255 * (1.0 - 0.1 * t)); // 255 to 230
-    g = Math.round(255 * (1.0 - 0.2 * t)); // 255 to 204
-    b = Math.round(255 * (0.8 - 0.6 * t)); // 204 to 51
-    alpha = 0.5 + t * 0.2; // 0.5 to 0.7
-  } else if (normalizedProb < 0.5) {
-    // Yellow to orange
-    const t = (normalizedProb - 0.25) / 0.25;
-    r = Math.round(230 + 23 * t); // 230 to 253
-    g = Math.round(204 - 60 * t); // 204 to 144
-    b = Math.round(51 - 24 * t);  // 51 to 27
-    alpha = 0.7 + t * 0.15; // 0.7 to 0.85
-  } else if (normalizedProb < 0.75) {
-    // Orange to red-orange
-    const t = (normalizedProb - 0.5) / 0.25;
-    r = Math.round(253 - 26 * t); // 253 to 227
-    g = Math.round(144 - 80 * t); // 144 to 64
-    b = Math.round(27 - 15 * t);  // 27 to 12
-    alpha = 0.85 + t * 0.1; // 0.85 to 0.95
-  } else {
-    // Red-orange to deep red
-    const t = (normalizedProb - 0.75) / 0.25;
-    r = Math.round(227 - 47 * t); // 227 to 180
-    g = Math.round(64 - 64 * t);  // 64 to 0
-    b = Math.round(12 - 12 * t);  // 12 to 0
-    alpha = 0.95 + t * 0.05; // 0.95 to 1.0
-  }
+  // Green channel: decreases from yellow to orange to red
+  const g = Math.round(255 * Math.pow(1 - normalizedProb * 0.85, 1.2));
+  
+  // Blue channel: very low to maintain warm colors
+  const b = Math.round(30 * Math.pow(1 - normalizedProb, 2));
+  
+  // Alpha: much more translucent (reduced from 0.3-0.8 to 0.15-0.5)
+  const alpha = 0.15 + 0.35 * Math.pow(normalizedProb, 0.8);
 
-  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
 };
 
 const createHeatmapTexture = (
@@ -117,9 +94,6 @@ const createHeatmapTexture = (
   // Clear canvas with full transparency
   ctx.clearRect(0, 0, width, height);
 
-  const cellWidth = width / lonRange.length;
-  const cellHeight = height / latRange.length;
-
   // Use ImageData for better performance with large datasets
   const imageData = ctx.createImageData(width, height);
   const data = imageData.data;
@@ -132,71 +106,95 @@ const createHeatmapTexture = (
     data[i + 3] = 0; // Alpha (transparent)
   }
 
-  // Process in batches to avoid blocking the main thread
-  const processGrid = () => {
-    for (let i = 0; i < latRange.length; i++) {
-      for (let j = 0; j < lonRange.length; j++) {
-        const probability = probGrid[i]?.[j];
-        if (!probability || probability <= 0.001) continue;
+  // Bilinear interpolation function for smooth transitions
+  const interpolateValue = (x: number, y: number): number => {
+    // Convert canvas pixel to lat/lon
+    // latRange goes from -90 to 90, lonRange goes from -180 to 180
+    const lon = (x / width) * 360 - 180;
+    const lat = 90 - (y / height) * 180;
+    
+    // Map lat/lon directly to grid indices
+    // latRange is sorted from -90 to 90, so we can calculate directly
+    const gridY = ((lat - latRange[0]) / (latRange[latRange.length - 1] - latRange[0])) * (latRange.length - 1);
+    const gridX = ((lon - lonRange[0]) / (lonRange[lonRange.length - 1] - lonRange[0])) * (lonRange.length - 1);
+    
+    // Get integer grid positions
+    const x1 = Math.floor(gridX);
+    const y1 = Math.floor(gridY);
+    const x2 = Math.min(x1 + 1, lonRange.length - 1);
+    const y2 = Math.min(y1 + 1, latRange.length - 1);
+    
+    // Bounds check
+    if (x1 < 0 || y1 < 0 || x2 >= lonRange.length || y2 >= latRange.length) return 0;
+    
+    // Get fractional parts
+    const fx = gridX - x1;
+    const fy = gridY - y1;
+    
+    // Get grid values (with bounds checking)
+    const v11 = (y1 >= 0 && y1 < probGrid.length && x1 >= 0 && x1 < probGrid[y1].length) ? probGrid[y1][x1] || 0 : 0;
+    const v12 = (y2 >= 0 && y2 < probGrid.length && x1 >= 0 && x1 < probGrid[y2].length) ? probGrid[y2][x1] || 0 : 0;
+    const v21 = (y1 >= 0 && y1 < probGrid.length && x2 >= 0 && x2 < probGrid[y1].length) ? probGrid[y1][x2] || 0 : 0;
+    const v22 = (y2 >= 0 && y2 < probGrid.length && x2 >= 0 && x2 < probGrid[y2].length) ? probGrid[y2][x2] || 0 : 0;
+    
+    // Apply cubic interpolation for smoother curves
+    const smoothFx = fx * fx * (3 - 2 * fx); // Smoothstep function
+    const smoothFy = fy * fy * (3 - 2 * fy);
+    
+    // Bilinear interpolation with smooth curves
+    const top = v11 * (1 - smoothFx) + v21 * smoothFx;
+    const bottom = v12 * (1 - smoothFx) + v22 * smoothFx;
+    return top * (1 - smoothFy) + bottom * smoothFy;
+  };
 
+  // Multi-sample anti-aliasing for even smoother results
+  const getSmoothedValue = (x: number, y: number): number => {
+    // Use 4x supersampling for anti-aliasing
+    const samples = [
+      interpolateValue(x - 0.25, y - 0.25),
+      interpolateValue(x + 0.25, y - 0.25),
+      interpolateValue(x - 0.25, y + 0.25),
+      interpolateValue(x + 0.25, y + 0.25)
+    ];
+    
+    return samples.reduce((sum, val) => sum + val, 0) / samples.length;
+  };
+
+  // Render each pixel with interpolated values
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Use smoothed value with anti-aliasing for better quality
+      const probability = getSmoothedValue(x, y);
+      
+      // Only render pixels where there's significant heatmap data
+      if (probability > 0.001) {
         const colorString = getHeatmapColorString(probability, maxProbability);
-        if (!colorString) continue;
-
-        // Parse the RGBA color string to RGBA
-        const rgba = parseRGBAToRGBA(colorString);
-        if (!rgba) continue;
-
-        const startX = Math.floor(j * cellWidth);
-        const endX = Math.min(Math.ceil((j + 1) * cellWidth), width);
-        const startY = Math.floor((latRange.length - 1 - i) * cellHeight);
-        const endY = Math.min(Math.ceil((latRange.length - i) * cellHeight), height);
-
-        // Only fill pixels where we have actual data - use precise cell boundaries
-        const pixelStartX = Math.max(0, startX);
-        const pixelEndX = Math.min(width, endX);
-        const pixelStartY = Math.max(0, startY);
-        const pixelEndY = Math.min(height, endY);
         
-        for (let x = pixelStartX; x < pixelEndX; x++) {
-          for (let y = pixelStartY; y < pixelEndY; y++) {
-            const index = (y * width + x) * 4;
-            data[index] = rgba.r;     // Red
-            data[index + 1] = rgba.g; // Green
-            data[index + 2] = rgba.b; // Blue
-            data[index + 3] = rgba.a; // Alpha
+        if (colorString) {
+          // Parse the rgba color string
+          const match = colorString.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+          if (match) {
+            const pixelIndex = (y * width + x) * 4;
+            data[pixelIndex] = parseInt(match[1]);     // Red
+            data[pixelIndex + 1] = parseInt(match[2]); // Green
+            data[pixelIndex + 2] = parseInt(match[3]); // Blue
+            data[pixelIndex + 3] = Math.round(parseFloat(match[4]) * 255); // Alpha
           }
         }
       }
+      // Pixels with probability <= 0.001 remain transparent (alpha=0)
+      // This ensures Earth's natural colors show through where there's no risk
     }
-  };
-
-  processGrid();
+  }
+  
+  // Put the image data on the canvas
   ctx.putImageData(imageData, 0, 0);
 
-  // Apply light additional blur similar to the original scipy smoothing
-  const blurCanvas = document.createElement('canvas');
-  blurCanvas.width = width;
-  blurCanvas.height = height;
-  const blurCtx = blurCanvas.getContext('2d');
-
-  if (blurCtx) {
-    // Light bilinear interpolation blur to match the original smooth appearance
-    blurCtx.filter = 'blur(1.5px)';
-    blurCtx.drawImage(baseCanvas, 0, 0);
-    blurCtx.filter = 'none';
-    blurCtx.globalAlpha = 0.85; // Blend with original for natural appearance
-    blurCtx.drawImage(baseCanvas, 0, 0);
-    return {
-      url: blurCanvas.toDataURL('image/png', 0.9), // High quality PNG
-      width,
-      height,
-    };
-  }
-
+  // Use PNG format to preserve alpha channel transparency properly
   return {
-    url: baseCanvas.toDataURL('image/jpeg', 0.8),
+    url: baseCanvas.toDataURL('image/png'),
     width,
-    height,
+    height
   };
 };
 
@@ -263,19 +261,6 @@ const gaussianFilter2D = (probGrid: number[][], sigma: number = 1.5): number[][]
   }
   
   return filtered;
-};
-
-// Helper function to parse RGBA string to RGBA object
-const parseRGBAToRGBA = (rgbaString: string): { r: number; g: number; b: number; a: number } | null => {
-  const match = rgbaString.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
-  if (!match) return null;
-
-  return {
-    r: parseInt(match[1]),
-    g: parseInt(match[2]),
-    b: parseInt(match[3]),
-    a: Math.round(parseFloat(match[4]) * 255)
-  };
 };
 
 export default function Globe({ data }: GlobeProps) {
@@ -430,7 +415,8 @@ export default function Globe({ data }: GlobeProps) {
 
             heatmapLayer.current = viewer.current.imageryLayers.addImageryProvider(provider);
             if (heatmapLayer.current) {
-              heatmapLayer.current.alpha = 0.8; // Match original prediction.py alpha
+              // Don't apply layer-wide alpha - let our per-pixel alpha handle transparency
+              heatmapLayer.current.alpha = 1.0; // Full alpha, our colors handle transparency
               heatmapLayer.current.brightness = 1.0;
               heatmapLayer.current.contrast = 1.0;
               heatmapLayer.current.gamma = 1.0;
