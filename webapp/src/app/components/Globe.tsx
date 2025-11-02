@@ -45,34 +45,52 @@ interface GlobeProps {
   data: HeatmapData | null;
 }
 
-const getHeatmapColorString = (probability: number, maxProbability: number): string | null => {
+const getHeatmapColorString = (probability: number, _maxProbability: number): string | null => {
   if (!probability || probability <= 0.001) return null;
 
-  // Use ABSOLUTE probability threshold of 5%, not relative to max
-  if (probability < 0.05) {
-    return null; // Hide anything below 5% absolute probability
+  // Use a reasonable threshold similar to the original
+  const minThreshold = 0.02; // 2% minimum threshold
+  if (probability < minThreshold) {
+    return null; // Hide low probability areas to keep Earth visible
   }
   
-  // Map absolute probability 5%-100% to color range
-  const absoluteRange = Math.min((probability - 0.05) / 0.95, 1); // 5% -> 100% maps to 0 -> 1
-  const eased = Math.pow(absoluteRange, 0.6); // Moderate contrast curve
+  // Map probability 2%-100% to the YlOrRd colormap (like matplotlib)
+  const normalizedProb = Math.min((probability - minThreshold) / (1 - minThreshold), 1);
   
-  // Adjust color mapping so 65%+ is red
-  // 5% = yellow (60°), 65% = red (0°)
-  const redThreshold = (0.65 - 0.05) / 0.95; // 65% maps to this point in our range
-  let hue;
-  if (absoluteRange >= redThreshold) {
-    hue = 0; // Pure red for 65%+
+  // Implement matplotlib's YlOrRd colormap colors
+  let r, g, b, alpha;
+  
+  if (normalizedProb < 0.25) {
+    // Light yellow to yellow (like YlOrRd start)
+    const t = normalizedProb / 0.25;
+    r = Math.round(255 * (1.0 - 0.1 * t)); // 255 to 230
+    g = Math.round(255 * (1.0 - 0.2 * t)); // 255 to 204
+    b = Math.round(255 * (0.8 - 0.6 * t)); // 204 to 51
+    alpha = 0.5 + t * 0.2; // 0.5 to 0.7
+  } else if (normalizedProb < 0.5) {
+    // Yellow to orange
+    const t = (normalizedProb - 0.25) / 0.25;
+    r = Math.round(230 + 23 * t); // 230 to 253
+    g = Math.round(204 - 60 * t); // 204 to 144
+    b = Math.round(51 - 24 * t);  // 51 to 27
+    alpha = 0.7 + t * 0.15; // 0.7 to 0.85
+  } else if (normalizedProb < 0.75) {
+    // Orange to red-orange
+    const t = (normalizedProb - 0.5) / 0.25;
+    r = Math.round(253 - 26 * t); // 253 to 227
+    g = Math.round(144 - 80 * t); // 144 to 64
+    b = Math.round(27 - 15 * t);  // 27 to 12
+    alpha = 0.85 + t * 0.1; // 0.85 to 0.95
   } else {
-    // Yellow to orange for 5%-65%
-    hue = 60 * (1 - (absoluteRange / redThreshold));
+    // Red-orange to deep red
+    const t = (normalizedProb - 0.75) / 0.25;
+    r = Math.round(227 - 47 * t); // 227 to 180
+    g = Math.round(64 - 64 * t);  // 64 to 0
+    b = Math.round(12 - 12 * t);  // 12 to 0
+    alpha = 0.95 + t * 0.05; // 0.95 to 1.0
   }
-  
-  const saturation = 85 + eased * 15; // 85% -> 100% saturation for intensity
-  const lightness = 55 - eased * 15; // 55% -> 40% lightness (darker = more intense)
-  const alpha = 0.5 + eased * 0.4; // 0.5 -> 0.9 alpha for good visibility
 
-  return `hsla(${hue.toFixed(0)}, ${saturation.toFixed(0)}%, ${lightness.toFixed(0)}%, ${alpha.toFixed(2)})`;
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
 };
 
 const createHeatmapTexture = (
@@ -81,8 +99,9 @@ const createHeatmapTexture = (
   probGrid: number[][],
   maxProbability: number
 ): { url: string; width: number; height: number } | null => {
-  const width = 1024;
-  const height = 512;
+  // Higher resolution for more precise heatmap details
+  const width = 4096;
+  const height = 2048;
 
   const baseCanvas = document.createElement('canvas');
   baseCanvas.width = width;
@@ -91,47 +110,171 @@ const createHeatmapTexture = (
   const ctx = baseCanvas.getContext('2d');
   if (!ctx) return null;
 
+  // Enable image smoothing for better performance with large datasets
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  
+  // Clear canvas with full transparency
   ctx.clearRect(0, 0, width, height);
 
   const cellWidth = width / lonRange.length;
   const cellHeight = height / latRange.length;
 
-  for (let i = 0; i < latRange.length; i++) {
-    for (let j = 0; j < lonRange.length; j++) {
-      const probability = probGrid[i]?.[j];
-      const fill = getHeatmapColorString(probability ?? 0, maxProbability);
-      if (!fill) continue;
-
-      const x = Math.floor(j * cellWidth);
-      const y = Math.floor((latRange.length - 1 - i) * cellHeight);
-
-      ctx.fillStyle = fill;
-      ctx.fillRect(x, y, Math.ceil(cellWidth) + 1, Math.ceil(cellHeight) + 1);
-    }
+  // Use ImageData for better performance with large datasets
+  const imageData = ctx.createImageData(width, height);
+  const data = imageData.data;
+  
+  // Initialize with transparent pixels
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 0;     // Red
+    data[i + 1] = 0; // Green
+    data[i + 2] = 0; // Blue
+    data[i + 3] = 0; // Alpha (transparent)
   }
 
+  // Process in batches to avoid blocking the main thread
+  const processGrid = () => {
+    for (let i = 0; i < latRange.length; i++) {
+      for (let j = 0; j < lonRange.length; j++) {
+        const probability = probGrid[i]?.[j];
+        if (!probability || probability <= 0.001) continue;
+
+        const colorString = getHeatmapColorString(probability, maxProbability);
+        if (!colorString) continue;
+
+        // Parse the RGBA color string to RGBA
+        const rgba = parseRGBAToRGBA(colorString);
+        if (!rgba) continue;
+
+        const startX = Math.floor(j * cellWidth);
+        const endX = Math.min(Math.ceil((j + 1) * cellWidth), width);
+        const startY = Math.floor((latRange.length - 1 - i) * cellHeight);
+        const endY = Math.min(Math.ceil((latRange.length - i) * cellHeight), height);
+
+        // Only fill pixels where we have actual data - use precise cell boundaries
+        const pixelStartX = Math.max(0, startX);
+        const pixelEndX = Math.min(width, endX);
+        const pixelStartY = Math.max(0, startY);
+        const pixelEndY = Math.min(height, endY);
+        
+        for (let x = pixelStartX; x < pixelEndX; x++) {
+          for (let y = pixelStartY; y < pixelEndY; y++) {
+            const index = (y * width + x) * 4;
+            data[index] = rgba.r;     // Red
+            data[index + 1] = rgba.g; // Green
+            data[index + 2] = rgba.b; // Blue
+            data[index + 3] = rgba.a; // Alpha
+          }
+        }
+      }
+    }
+  };
+
+  processGrid();
+  ctx.putImageData(imageData, 0, 0);
+
+  // Apply light additional blur similar to the original scipy smoothing
   const blurCanvas = document.createElement('canvas');
   blurCanvas.width = width;
   blurCanvas.height = height;
   const blurCtx = blurCanvas.getContext('2d');
 
   if (blurCtx) {
-    blurCtx.filter = 'blur(6px)';
+    // Light bilinear interpolation blur to match the original smooth appearance
+    blurCtx.filter = 'blur(1.5px)';
     blurCtx.drawImage(baseCanvas, 0, 0);
     blurCtx.filter = 'none';
-    blurCtx.globalAlpha = 0.65;
+    blurCtx.globalAlpha = 0.85; // Blend with original for natural appearance
     blurCtx.drawImage(baseCanvas, 0, 0);
     return {
-      url: blurCanvas.toDataURL('image/png'),
+      url: blurCanvas.toDataURL('image/png', 0.9), // High quality PNG
       width,
       height,
     };
   }
 
   return {
-    url: baseCanvas.toDataURL('image/png'),
+    url: baseCanvas.toDataURL('image/jpeg', 0.8),
     width,
     height,
+  };
+};
+
+// Gaussian smoothing function using proper 2D Gaussian filter (like scipy.ndimage.gaussian_filter)
+const gaussianFilter2D = (probGrid: number[][], sigma: number = 1.5): number[][] => {
+  const rows = probGrid.length;
+  const cols = probGrid[0]?.length || 0;
+  
+  if (rows === 0 || cols === 0) return probGrid;
+  
+  // Calculate kernel size based on sigma (3 standard deviations)
+  const kernelRadius = Math.ceil(3 * sigma);
+  const kernelSize = 2 * kernelRadius + 1;
+  
+  // Create 2D Gaussian kernel
+  const kernel: number[][] = [];
+  let kernelSum = 0;
+  
+  for (let i = 0; i < kernelSize; i++) {
+    kernel[i] = [];
+    for (let j = 0; j < kernelSize; j++) {
+      const x = i - kernelRadius;
+      const y = j - kernelRadius;
+      const value = Math.exp(-(x * x + y * y) / (2 * sigma * sigma));
+      kernel[i][j] = value;
+      kernelSum += value;
+    }
+  }
+  
+  // Normalize kernel
+  for (let i = 0; i < kernelSize; i++) {
+    for (let j = 0; j < kernelSize; j++) {
+      kernel[i][j] /= kernelSum;
+    }
+  }
+  
+  // Apply convolution with proper boundary handling
+  const filtered: number[][] = [];
+  for (let i = 0; i < rows; i++) {
+    filtered[i] = [];
+    for (let j = 0; j < cols; j++) {
+      let sum = 0;
+      let weightSum = 0;
+      
+      for (let ki = 0; ki < kernelSize; ki++) {
+        for (let kj = 0; kj < kernelSize; kj++) {
+          const ni = i + ki - kernelRadius;
+          const nj = j + kj - kernelRadius;
+          
+          // Handle boundaries by clamping (similar to scipy's 'nearest' mode)
+          const clamped_i = Math.max(0, Math.min(rows - 1, ni));
+          const clamped_j = Math.max(0, Math.min(cols - 1, nj));
+          
+          const value = probGrid[clamped_i][clamped_j];
+          if (value !== null && value !== undefined) {
+            sum += value * kernel[ki][kj];
+            weightSum += kernel[ki][kj];
+          }
+        }
+      }
+      
+      filtered[i][j] = weightSum > 0 ? sum / weightSum : probGrid[i][j] || 0;
+    }
+  }
+  
+  return filtered;
+};
+
+// Helper function to parse RGBA string to RGBA object
+const parseRGBAToRGBA = (rgbaString: string): { r: number; g: number; b: number; a: number } | null => {
+  const match = rgbaString.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+  if (!match) return null;
+
+  return {
+    r: parseInt(match[1]),
+    g: parseInt(match[2]),
+    b: parseInt(match[3]),
+    a: Math.round(parseFloat(match[4]) * 255)
   };
 };
 
@@ -175,7 +318,13 @@ export default function Globe({ data }: GlobeProps) {
         
         // Remove default imagery and add realistic satellite imagery
         viewer.current.imageryLayers.removeAll();
-        viewer.current.imageryLayers.addImageryProvider(osmSatelliteImagery);
+        const baseLayer = viewer.current.imageryLayers.addImageryProvider(osmSatelliteImagery);
+        // Ensure base layer is visible and properly configured
+        if (baseLayer) {
+          baseLayer.alpha = 1.0;
+          baseLayer.brightness = 1.0;
+          baseLayer.contrast = 1.0;
+        }
       } catch (error) {
         console.log('Falling back to standard OSM', error);
         // Fallback to standard OpenStreetMap if satellite fails
@@ -185,7 +334,12 @@ export default function Globe({ data }: GlobeProps) {
             maximumLevel: 18,
           });
           viewer.current.imageryLayers.removeAll();
-          viewer.current.imageryLayers.addImageryProvider(osmStandardImagery);
+          const fallbackLayer = viewer.current.imageryLayers.addImageryProvider(osmStandardImagery);
+          if (fallbackLayer) {
+            fallbackLayer.alpha = 1.0;
+            fallbackLayer.brightness = 1.0;
+            fallbackLayer.contrast = 1.0;
+          }
         } catch (osmError) {
           console.log('Using default imagery', osmError);
         }
@@ -200,20 +354,24 @@ export default function Globe({ data }: GlobeProps) {
       viewer.current.scene.primitives.removeAll();
       viewer.current.entities.removeAll();
       
-      // Set dark theme but keep Earth imagery visible
+      // Set background but keep Earth bright and visible
       viewer.current.scene.backgroundColor = Cesium.Color.BLACK;
-      // Remove the base color override to show natural Earth imagery
-      // viewer.current.scene.globe.baseColor = Cesium.Color.BLACK;
       
-      // Disable lighting for consistent brightness
+      // Keep Earth imagery visible - disable lighting that might interfere
       viewer.current.scene.globe.enableLighting = false;
       viewer.current.scene.globe.dynamicAtmosphereLighting = false;
+      
+      // Don't override the base color - let the satellite imagery show through
+      // viewer.current.scene.globe.baseColor = Cesium.Color.WHITE;
       
       // Enable atmosphere for realistic look
       viewer.current.scene.globe.showGroundAtmosphere = true;
       if (viewer.current.scene.skyAtmosphere) {
         viewer.current.scene.skyAtmosphere.show = true;
       }
+      
+      // Disable fog for cleaner view
+      viewer.current.scene.fog.enabled = false;
 
       // Set initial camera position (focused on world view)
       viewer.current.camera.setView({
@@ -251,22 +409,40 @@ export default function Globe({ data }: GlobeProps) {
       heatmapLayer.current = null;
     }
 
-    const heatmapTexture = createHeatmapTexture(lat_range, lon_range, prob_grid, statistics.max_probability);
-    if (heatmapTexture) {
-      const provider = new Cesium.SingleTileImageryProvider({
-        url: heatmapTexture.url,
-        rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90),
-        tileWidth: heatmapTexture.width,
-        tileHeight: heatmapTexture.height,
-      });
+    // Show loading state for large datasets
+    console.log(`Processing heatmap with ${lat_range.length * lon_range.length} data points...`);
+    
+    // Use requestAnimationFrame to prevent blocking the UI
+    const processHeatmap = () => {
+      requestAnimationFrame(() => {
+        try {
+          // Apply minimal Gaussian smoothing with sigma=0.5 for sharp, precise points
+          const smoothedGrid = gaussianFilter2D(prob_grid, 0.5);
+          
+          const heatmapTexture = createHeatmapTexture(lat_range, lon_range, smoothedGrid, statistics.max_probability);
+          if (heatmapTexture && viewer.current) {
+            const provider = new Cesium.SingleTileImageryProvider({
+              url: heatmapTexture.url,
+              rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90),
+              tileWidth: heatmapTexture.width,
+              tileHeight: heatmapTexture.height,
+            });
 
-      heatmapLayer.current = viewer.current.imageryLayers.addImageryProvider(provider);
-      if (heatmapLayer.current) {
-        heatmapLayer.current.alpha = 0.72;
-        heatmapLayer.current.brightness = 1.08;
-        heatmapLayer.current.contrast = 1.05;
-      }
-    }
+            heatmapLayer.current = viewer.current.imageryLayers.addImageryProvider(provider);
+            if (heatmapLayer.current) {
+              heatmapLayer.current.alpha = 0.8; // Match original prediction.py alpha
+              heatmapLayer.current.brightness = 1.0;
+              heatmapLayer.current.contrast = 1.0;
+              heatmapLayer.current.gamma = 1.0;
+            }
+          }
+        } catch (error) {
+          console.error('Error creating heatmap texture:', error);
+        }
+      });
+    };
+
+    processHeatmap();
 
     // Clear and rebuild entities (but we'll keep it empty for clean heatmap-only view)
     viewer.current.entities.removeAll();
