@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import * as Cesium from 'cesium';
 
 // Set the Cesium Ion access token (you can get a free one from cesium.com)
@@ -51,8 +51,8 @@ const getHeatmapColorString = (probability: number, maxProbability: number): str
   // Continuous normalization - no discrete bands!
   const normalizedProb = Math.min(probability / maxProbability, 1);
   
-  // Only show colors for significant probabilities (reduced from 5% to 0.5%)
-  if (normalizedProb < 0.015) return null; // Skip very low probability areas
+  // Only show colors for significant probabilities (reduced from 5% to 2.5%)
+  if (normalizedProb < 0.025) return null; // Skip very low probability areas
   
   // Smooth heat map colors: light yellow -> orange -> red
   // Red channel: always high
@@ -267,6 +267,7 @@ export default function Globe({ data }: GlobeProps) {
   const cesiumContainer = useRef<HTMLDivElement>(null);
   const viewer = useRef<Cesium.Viewer | null>(null);
   const heatmapLayer = useRef<Cesium.ImageryLayer | null>(null);
+  const [clickInfo, setClickInfo] = useState<{ lat: number; lon: number; probability: number; percentage: string } | null>(null);
 
   useEffect(() => {
     if (!cesiumContainer.current) return;
@@ -367,6 +368,7 @@ export default function Globe({ data }: GlobeProps) {
           roll: 0.0
         }
       });
+
     };
 
     initViewer();
@@ -382,6 +384,49 @@ export default function Globe({ data }: GlobeProps) {
       }
     };
   }, []);
+
+  // Separate useEffect for click handler that depends on data
+  useEffect(() => {
+    if (!viewer.current || !data) return;
+
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.current.scene.canvas);
+    handler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
+      if (!viewer.current || !data) return;
+
+      const cartesian = viewer.current.camera.pickEllipsoid(movement.position, viewer.current.scene.globe.ellipsoid);
+      if (cartesian) {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        const lat = Cesium.Math.toDegrees(cartographic.latitude);
+        const lon = Cesium.Math.toDegrees(cartographic.longitude);
+
+        // Get probability at this location
+        const { lat_range, lon_range, prob_grid, statistics } = data;
+        
+        // Map lat/lon to grid indices
+        const gridY = ((lat - lat_range[0]) / (lat_range[lat_range.length - 1] - lat_range[0])) * (lat_range.length - 1);
+        const gridX = ((lon - lon_range[0]) / (lon_range[lon_range.length - 1] - lon_range[0])) * (lon_range.length - 1);
+        
+        const y = Math.round(gridY);
+        const x = Math.round(gridX);
+        
+        if (y >= 0 && y < prob_grid.length && x >= 0 && x < prob_grid[y].length) {
+          const probability = prob_grid[y][x] || 0;
+          const percentage = ((probability / statistics.max_probability) * 100).toFixed(2);
+          
+          setClickInfo({
+            lat: lat,
+            lon: lon,
+            probability: probability,
+            percentage: percentage
+          });
+        }
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    return () => {
+      handler.destroy();
+    };
+  }, [data]);
 
   useEffect(() => {
     if (!viewer.current || !data) return;
@@ -439,10 +484,36 @@ export default function Globe({ data }: GlobeProps) {
   }, [data]);
 
   return (
-    <div 
-      ref={cesiumContainer} 
-      className="absolute inset-0 w-full h-full"
-      style={{ background: 'black' }}
-    />
+    <>
+      <div 
+        ref={cesiumContainer} 
+        className="absolute inset-0 w-full h-full"
+        style={{ background: 'black' }}
+      />
+      
+      {/* Click info display */}
+      {clickInfo && (
+        <div className="absolute top-4 right-4 bg-black/80 text-white p-4 rounded-lg shadow-lg backdrop-blur-sm border border-white/20">
+          <h3 className="font-bold text-lg mb-2">Shark Attack Risk</h3>
+          <div className="space-y-1 text-sm">
+            <p><span className="text-gray-400">Latitude:</span> {clickInfo.lat.toFixed(4)}°</p>
+            <p><span className="text-gray-400">Longitude:</span> {clickInfo.lon.toFixed(4)}°</p>
+            <p className="pt-2 border-t border-white/20">
+              <span className="text-gray-400">Risk Level:</span>{' '}
+              <span className="text-yellow-400 font-semibold">{clickInfo.percentage}%</span>
+            </p>
+            <p className="text-xs text-gray-500">
+              Probability: {clickInfo.probability.toFixed(6)}
+            </p>
+          </div>
+          <button 
+            onClick={() => setClickInfo(null)}
+            className="mt-3 w-full bg-white/10 hover:bg-white/20 text-white text-xs py-1 px-2 rounded transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </>
   );
 }
