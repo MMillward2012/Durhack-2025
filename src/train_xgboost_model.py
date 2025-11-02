@@ -45,14 +45,27 @@ class SharkAttackPredictor:
         self.feature_names = None
         self.is_trained = False
         
-    def load_data(self, filepath='data/processed/final_real_shark_data.csv'):
-        """Load and prepare the shark attack dataset."""
+    def load_data(self, positive_filepath='data/processed/positive_with_real_shark_density.csv', 
+                  negative_filepath='data/processed/negative_with_real_shark_density.csv'):
+        """Load and combine positive and negative datasets with real shark density."""
         
-        logger.info(f"📊 Loading data from {filepath}")
+        logger.info(f"📊 Loading positive data from {positive_filepath}")
+        logger.info(f"📊 Loading negative data from {negative_filepath}")
         
-        # Load the data
-        df = pd.read_csv(filepath)
-        logger.info(f"Loaded {len(df):,} records")
+        # Load positive and negative datasets
+        positive_df = pd.read_csv(positive_filepath)
+        negative_df = pd.read_csv(negative_filepath)
+        
+        # Add Attack_Type column
+        positive_df['Attack_Type'] = 'positive'
+        negative_df['Attack_Type'] = 'negative'
+        
+        # Combine the datasets
+        df = pd.concat([positive_df, negative_df], ignore_index=True)
+        
+        logger.info(f"Loaded {len(positive_df):,} positive records")
+        logger.info(f"Loaded {len(negative_df):,} negative records") 
+        logger.info(f"Combined total: {len(df):,} records")
         
         # Basic data info
         logger.info(f"Columns: {df.columns.tolist()}")
@@ -67,10 +80,109 @@ class SharkAttackPredictor:
         
         return df
     
-    def engineer_features(self, df):
-        """Minimal feature engineering - just convert target and log population."""
+    def preprocess_geographic_bias(self, df, balance_regions=True, coastal_focus=True):
+        """
+        Preprocess data to reduce geographic bias and focus on environmental factors.
         
-        logger.info("🔧 Minimal feature engineering...")
+        Args:
+            df: Combined positive/negative dataframe
+            balance_regions: Create balanced negative samples per region
+            coastal_focus: Filter to coastal areas only (reasonable shark habitat)
+        """
+        
+        logger.info("🌍 Preprocessing to reduce geographic bias...")
+        
+        df_processed = df.copy()
+        
+        # 1. Focus on coastal areas only (sharks don't attack in deep ocean/inland)
+        if coastal_focus:
+            logger.info("Filtering to coastal areas (reasonable shark habitat)...")
+            
+            # Remove extreme latitudes (polar regions) where sharks don't exist
+            coastal_mask = (
+                (df_processed['Latitude'].abs() <= 60) &  # No polar regions
+                (df_processed['Population'] > 1000)  # Some human presence (coastal areas)
+            )
+            
+            before_count = len(df_processed)
+            df_processed = df_processed[coastal_mask].copy()
+            after_count = len(df_processed)
+            
+            logger.info(f"Coastal filtering: {before_count:,} → {after_count:,} records "
+                       f"({after_count/before_count:.1%} retained)")
+        
+        # 2. Geographic region balancing
+        if balance_regions:
+            logger.info("Balancing negative samples across geographic regions...")
+            
+            positive_df = df_processed[df_processed['Attack_Type'] == 'positive'].copy()
+            negative_df = df_processed[df_processed['Attack_Type'] == 'negative'].copy()
+            
+            # Define regions based on positive samples
+            def get_region(lat, lon):
+                """Classify into broad geographic regions."""
+                if lat >= 24 and lat <= 50 and lon >= -100 and lon <= -60:
+                    return 'North America East'
+                elif lat >= 10 and lat <= 40 and lon >= -130 and lon <= -100:
+                    return 'North America West'
+                elif lat >= -40 and lat <= -10 and lon >= 110 and lon <= 160:
+                    return 'Australia/Pacific'
+                elif lat >= -40 and lat <= 40 and lon >= -20 and lon <= 60:
+                    return 'Africa/Europe'
+                elif lat >= -30 and lat <= 30 and lon >= 60 and lon <= 110:
+                    return 'Asia'
+                elif lat >= -60 and lat <= 20 and lon >= -90 and lon <= -30:
+                    return 'South America'
+                else:
+                    return 'Other'
+            
+            # Add regions to dataframes
+            positive_df['Region'] = positive_df.apply(lambda x: get_region(x['Latitude'], x['Longitude']), axis=1)
+            negative_df['Region'] = negative_df.apply(lambda x: get_region(x['Latitude'], x['Longitude']), axis=1)
+            
+            # Count positive samples per region
+            pos_region_counts = positive_df['Region'].value_counts()
+            logger.info(f"Positive samples by region: {pos_region_counts.to_dict()}")
+            
+            # Balance negative samples: sample negative records from each region 
+            # proportional to positive samples (but with reasonable minimum)
+            balanced_negatives = []
+            total_positives = len(positive_df)
+            
+            for region in pos_region_counts.index:
+                pos_count = pos_region_counts[region]
+                region_negatives = negative_df[negative_df['Region'] == region]
+                
+                if len(region_negatives) > 0:
+                    # Target: 3x negative samples per positive in each region (minimum 100)
+                    target_negatives = max(100, pos_count * 3)
+                    actual_sample = min(target_negatives, len(region_negatives))
+                    
+                    sampled = region_negatives.sample(n=actual_sample, random_state=42)
+                    balanced_negatives.append(sampled)
+                    
+                    logger.info(f"Region {region}: {pos_count} pos, "
+                               f"{len(region_negatives)} neg available, "
+                               f"{actual_sample} neg sampled")
+            
+            # Combine balanced negative samples
+            balanced_negative_df = pd.concat(balanced_negatives, ignore_index=True)
+            
+            # Combine with all positive samples
+            df_processed = pd.concat([positive_df, balanced_negative_df], ignore_index=True)
+            
+            # Remove the temporary Region column
+            df_processed = df_processed.drop(columns=['Region'])
+            
+            logger.info(f"After geographic balancing: {len(df_processed):,} total records")
+            logger.info(f"Final distribution: {df_processed['Attack_Type'].value_counts().to_dict()}")
+        
+        return df_processed
+    
+    def engineer_features(self, df):
+        """Simple feature engineering - just convert target and log population."""
+        
+        logger.info("🔧 Simple feature engineering...")
         
         # Create a copy to avoid modifying original
         df_features = df.copy()
@@ -86,13 +198,13 @@ class SharkAttackPredictor:
         return df_features
     
     def prepare_features(self, df):
-        """Prepare features for model training."""
+        """Prepare original features for model training."""
         
-        logger.info("📋 Preparing features for training...")
+        logger.info("📋 Preparing original features for training...")
         
-        # Use original measurements + log population
+        # Use original features but exclude raw coordinates to reduce overfitting
         feature_cols = [
-            'Year', 'Month', 'Latitude', 'Longitude', 
+            'Year', 'Month', 
             'SST_Celsius', 'Real_Shark_Density', 'Log_Population'
         ]
         
@@ -110,8 +222,9 @@ class SharkAttackPredictor:
         # Handle missing values
         X = X.fillna(X.median())
         
-        logger.info(f"✅ Prepared {len(available_features)} features for {len(X):,} samples")
+        logger.info(f"✅ Prepared {len(available_features)} original features for {len(X):,} samples")
         logger.info(f"Features: {available_features}")
+        logger.info("🚫 Excluded Latitude/Longitude to prevent geographic overfitting")
         
         return X, y
     
@@ -270,8 +383,8 @@ class SharkAttackPredictor:
                    dpi=300, bbox_inches='tight')
         plt.show()
     
-    def predict_attack_probability(self, features_dict):
-        """Predict attack probability for given features."""
+    def predict_attack_probability(self, features_dict, apply_constraints=True):
+        """Predict attack probability for given features with optional post-processing constraints."""
         
         if not self.is_trained:
             logger.error("Model not trained yet!")
@@ -280,10 +393,29 @@ class SharkAttackPredictor:
         # Convert to DataFrame
         df = pd.DataFrame([features_dict])
         
-        # Get probability
-        prob = self.model.predict_proba(df)[:, 1][0]
+        # Get raw probability from model
+        raw_prob = self.model.predict_proba(df)[:, 1][0]
         
-        return prob
+        if not apply_constraints:
+            return raw_prob
+        
+        # Apply post-processing constraints
+        constrained_prob = raw_prob
+        
+        # Constraint 1: Zero shark density should drastically reduce probability
+        shark_density = features_dict.get('Real_Shark_Density', 0)
+        if shark_density == 0:
+            # If no sharks present, reduce probability dramatically
+            constrained_prob = raw_prob * 0.01  # Reduce by 99%
+        elif shark_density < 0.05:  # Very low shark density
+            # Scale down probability proportionally
+            scaling_factor = shark_density / 0.05  # Linear scaling from 0 to 1
+            constrained_prob = raw_prob * (0.01 + 0.99 * scaling_factor)
+        
+        # Ensure probability doesn't exceed reasonable bounds
+        constrained_prob = min(constrained_prob, 0.95)  # Cap at 95%
+        
+        return constrained_prob
     
     def save_model(self, filepath='models/shark_attack_xgboost_model.pkl'):
         """Save the trained model."""
@@ -317,17 +449,27 @@ class SharkAttackPredictor:
         logger.info(f"✅ Model loaded from {filepath}")
 
 def main():
-    """Main training pipeline."""
+    """Main training pipeline with geographic bias preprocessing."""
     
-    logger.info("🦈 Starting Shark Attack Prediction Model Training")
-    logger.info("=" * 60)
+    logger.info("🦈 Starting ENHANCED Shark Attack Prediction Model Training")
+    logger.info("🌍 With Geographic Bias Reduction & Environmental Focus")
+    logger.info("=" * 70)
     
     # Initialize predictor
     predictor = SharkAttackPredictor(random_state=42)
     
-    # Load and prepare data
-    df = predictor.load_data()
-    df_features = predictor.engineer_features(df)
+    # Load raw data
+    df_raw = predictor.load_data()
+    
+    # Apply geographic bias preprocessing
+    df_processed = predictor.preprocess_geographic_bias(
+        df_raw, 
+        balance_regions=True, 
+        coastal_focus=True
+    )
+    
+    # Enhanced feature engineering
+    df_features = predictor.engineer_features(df_processed)
     X, y = predictor.prepare_features(df_features)
     
     # Train model
@@ -339,21 +481,31 @@ def main():
     # Plot ROC curve
     predictor.plot_roc_curve(X_test, y_test, "Test Set")
     
-    # Save model
-    predictor.save_model()
+    # Save model with new name to distinguish from old model
+    predictor.save_model('models/shark_attack_xgboost_environmental_model.pkl')
     
-    # Example prediction
-    logger.info("\n🔮 Example Prediction:")
+    # Example prediction with original features
+    logger.info("\n🔮 Example Predictions with Post-Processing:")
     example_features = {
-        'Year': 2024, 'Month': 7, 'Latitude': 27.0, 'Longitude': -80.0,
+        'Year': 2024, 'Month': 7,
         'SST_Celsius': 26.5, 'Real_Shark_Density': 0.15, 'Log_Population': 13.12
     }
     
-    prob = predictor.predict_attack_probability(example_features)
-    logger.info(f"Attack probability for Florida coast in July: {prob:.1%}")
+    raw_prob = predictor.predict_attack_probability(example_features, apply_constraints=False)
+    constrained_prob = predictor.predict_attack_probability(example_features, apply_constraints=True)
+    logger.info(f"High shark density coast - Raw: {raw_prob:.1%}, Constrained: {constrained_prob:.1%}")
     
-    logger.info("\n🎉 Model training completed successfully!")
-    logger.info("Model saved and ready for predictions.")
+    # Test with zero shark density
+    example_no_sharks = example_features.copy()
+    example_no_sharks['Real_Shark_Density'] = 0.0
+    
+    raw_prob_zero = predictor.predict_attack_probability(example_no_sharks, apply_constraints=False)
+    constrained_prob_zero = predictor.predict_attack_probability(example_no_sharks, apply_constraints=True)
+    logger.info(f"Zero shark density - Raw: {raw_prob_zero:.1%}, Constrained: {constrained_prob_zero:.1%}")
+    
+    logger.info("\n🎉 Model with post-processing constraints completed!")
+    logger.info("Geographic bias reduced + shark density constraints applied.")
+    logger.info("Saved as: models/shark_attack_xgboost_environmental_model.pkl")
 
 if __name__ == "__main__":
     main()
