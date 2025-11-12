@@ -1,125 +1,136 @@
 # 🦈 Shark Attack Prediction Heatmap
-**Durham Hackathon 2025 - Predicting the Future Challenge**
+**Durham Hackathon 2025 · Predict the Future Challenge**
+
+Interactive modelling, prediction, and visualization tooling that forecasts global shark attack risk by combining environmental signals, human activity, and historical incident data. The project delivers both a reproducible data science pipeline and a production-ready Next.js web experience with 3D and 2D risk exploration.
 
 ---
 
-## 🎯 Project Overview
+## 🌍 What the Project Delivers
 
-A predictive **heatmap model** that forecasts shark attack risk zones by analyzing multiple environmental and human activity factors.
-
-**Can we predict where and when shark attacks are most likely to occur?**
-
-### Key Data Inputs
-- 📊 Historical Attack Data (GSAF - Global Shark Attack File)
-- 🌡️ Ocean Temperature (SST - Sea Surface Temperature)
-- 🏖️ Beach Tourism Levels (visitor counts, seasonal trends)
-- 🐟 Fish Migration Patterns (prey availability)
-- ⛈️ Coastal Weather Conditions (storms, visibility, water clarity)
-- 🏄 Victim Activity Types (surfing, swimming, diving, etc.)
-
-### Impact
-By predicting high-risk zones and times, we can:
-- Help beach authorities issue timely warnings
-- Inform tourists and water sports enthusiasts
-- Guide lifeguard and patrol resource allocation
-- Improve coastal safety planning
+- **Data engineering pipeline** that aggregates NOAA SST data, population density, shark density grids, and historical incidents into training-ready features.
+- **Machine learning models** (XGBoost) that estimate attack likelihood per location and month, including climate-adjusted post-processing.
+- **Automated dataset generation** (`generate_webapp_data_simple.py`) that exports monthly heatmap JSON files consumed by the webapp.
+- **Immersive web application** featuring a Cesium-powered 3D globe and Leaflet 2D satellite map with synchronized heatmap overlays, timeline scrubbing, and location-level risk callouts.
+- **Actionable insights** for coastal authorities, lifeguards, and ocean users through dynamic high-risk zone detection and contextual climate metrics.
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Architecture at a Glance
 
-### 1. Setup Environment
-```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 2. Fetch Data
-```bash
-# Fetch ocean temperature data
-python src/fetch_noaa_sst.py
-```
-
-### 3. Run Analysis
-```bash
-# Open Jupyter for exploration
-jupyter notebook
-
-# Or run main pipeline
-python main.py
-```
+| Layer | Highlights |
+| --- | --- |
+| **Data + Features** | Scripts in `src/` and the root helper utilities fetch SST climatology, population, and shark density, then engineer globe-wide samples per month. |
+| **Modelling** | `models/` stores trained XGBoost artifacts used by `generate_webapp_data_simple.py` and `src/prediction.py` for inference and reporting. |
+| **Visualization** | `webapp/` (Next.js + Cesium + Leaflet + Tailwind) renders the ML outputs as an interactive heatmap with timeline playback and risk drill-down. |
 
 ---
 
-## � Project Structure
+## 📂 Repository Structure
+
 ```
 Durhack-2025/
 ├── data/
-│   ├── raw/              # GSAF data, ocean temp, tourism data
-│   └── processed/        # Cleaned & merged datasets
-├── src/                  # Source code (data fetching, processing, models)
-├── notebooks/            # Jupyter notebooks for EDA & visualization
-├── models/               # Trained ML models
-├── maps/                 # Generated heatmap outputs
-├── docs/                 # Detailed documentation
-│   ├── PROJECT_PLAN.md   # 24-hour hackathon timeline
-│   ├── QUICKSTART.md     # Step-by-step getting started guide
-│   └── README_SST_FETCHER.md  # NOAA data fetcher docs
-└── requirements.txt      # Python dependencies
+│   ├── raw/                 # Source CSVs (SST, shark incidents, etc.)
+│   └── processed/           # Generated shark density grids & merged datasets
+├── models/                  # Trained XGBoost model artifacts & evaluation plots
+├── notebooks/               # Exploratory analysis and prototype modelling
+├── src/                     # Python feature engineering + training utilities
+│   ├── train_xgboost_model.py
+│   ├── prediction.py        # Batch prediction / report generator
+│   └── get_sst_data.py, get_pop_data.py, ...
+├── webapp/                  # Next.js app (3D globe + 2D map UI)
+│   ├── public/data/         # Heatmap JSON tiles (generated monthly)
+│   └── src/app/...          # React components: Globe, LeafletMap, sidebar
+├── generate_webapp_data_simple.py  # Main pipeline to produce webapp datasets
+├── download_sst_data.py             # Helper fetcher for SST climatology
+├── main.py                           # Entry banner / CLI helper
+├── docs/                     # Hackathon plan & supplemental documentation
+│   ├── PROJECT_PLAN.md
+│   ├── QUICKSTART.md
+│   └── README_SST_FETCHER.md
+└── requirements.txt          # Python dependencies
 ```
 
 ---
 
-## 📖 Documentation
+## � Quick Start
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Step-by-step instructions, code snippets, and workflow
-- **[Project Plan](docs/PROJECT_PLAN.md)** - Complete 24-hour timeline, data sources, and technical approach
-- **[SST Data Fetcher](docs/README_SST_FETCHER.md)** - How to fetch ocean temperature data
+### 1. Data & Modelling (Python)
+
+```bash
+# create & activate a virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# install core dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# (optional) pull latest SST climatology
+python download_sst_data.py
+
+# generate monthly risk datasets for the webapp
+python generate_webapp_data_simple.py
+
+# retrain or evaluate the ML model
+python src/train_xgboost_model.py
+python src/prediction.py
+```
+
+Generated heatmap JSON files are written to `webapp/public/data/heatmap_YYYY_MM.json` and are immediately picked up by the frontend.
+
+### 2. Interactive Web Experience (Next.js)
+
+```bash
+cd webapp
+npm install
+npm run dev
+```
+
+Navigate to `http://localhost:3000` to explore:
+
+| Feature | Description |
+| --- | --- |
+| 3D Globe | Cesium-based Earth with dynamic heatmap overlay, climate stats, and click-to-inspect risk. |
+| 2D Map | Leaflet satellite basemap with synchronized heatmap, respecting probability transparency thresholds. |
+| Timeline Player | Scrub month-by-month to see risk evolution (view choice persists across timeline changes). |
+| Sidebar Insights | Peak/average risk, climate adjustments, top-level metrics, and explanatory copy. |
+| Detail Card | Clicking any location reveals latitude, longitude, and relative risk level. |
 
 ---
 
-## 🛠️ Tech Stack
+## 📚 Documentation & Supporting Material
 
-**Data Processing**: pandas, numpy  
-**Geospatial**: geopandas, folium, shapely, plotly  
-**Machine Learning**: scikit-learn, xgboost  
-**Visualization**: matplotlib, seaborn, plotly, folium  
-**Data Sources**: NOAA APIs, GSAF, OpenWeather  
-**Demo**: streamlit + interactive folium maps  
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** – step-by-step workshop notes and CLI walkthroughs.
+- **[docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)** – the 24-hour hackathon timeline, milestones, and task allocation.
+- **[docs/README_SST_FETCHER.md](docs/README_SST_FETCHER.md)** – NOAA SST data acquisition guide.
 
 ---
 
-## 📊 Key Data Sources
+## 📊 Data Sources
 
-1. **[GSAF](https://www.sharkattackfile.net/)** - Global Shark Attack File (historical records)
-2. **[NOAA OISST](https://www.ncei.noaa.gov/products/optimum-interpolation-sst)** - Sea surface temperature data
-3. **[Kaggle Datasets](https://www.kaggle.com/)** - Pre-formatted shark attack datasets
-4. **Tourism Statistics** - Beach visitor data (regional tourism boards)
-5. **Weather Data** - OpenWeatherMap, NOAA weather APIs
-
----
-
-## 🎯 Getting Started Checklist
-
-- [ ] Clone repository and activate virtual environment
-- [ ] Install dependencies: `pip install -r requirements.txt`
-- [ ] Download GSAF shark attack data from Kaggle
-- [ ] Run `python src/fetch_noaa_sst.py` to get ocean temperature data
-- [ ] Start with [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed workflow
-- [ ] Follow [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the 24-hour timeline
+1. **[Global Shark Attack File (GSAF)](https://www.sharkattackfile.net/)** – historical incident records.
+2. **[NOAA Optimum Interpolation SST](https://www.ncei.noaa.gov/products/optimum-interpolation-sst)** – sea surface temperature baselines.
+3. **Population & Tourism Datasets** – regional visitor counts and population proxies (`data/population/`).
+4. **Derived Shark Density Grid** – processed sightings density stored in `data/processed/shark_density_grid.csv`.
 
 ---
 
-## 👥 Team
+## 🧰 Tech Stack
 
-Durham Hackathon 2025 participants  
-**Challenge**: Predict the Future
+- **Python & Data Science**: pandas, numpy, scipy, scikit-learn, xgboost, joblib, geopy.
+- **Geospatial Processing**: shapely, geopandas (notebooks), custom grid smoothing, Gaussian filters.
+- **Frontend**: Next.js, React, TypeScript, Tailwind CSS, CesiumJS, React-Leaflet, ESRI World Imagery tiles.
+- **Tooling**: Jupyter Notebooks, npm, Node.js, GitHub Actions (optional).
 
 ---
 
-## 📝 License
+## 🤝 Contributing & Next Steps
 
-See [LICENSE](LICENSE) file for details.
+Pull requests and experiments are welcome—consider extending the data ingestion pipeline, adding model explainability, or deploying the webapp. Review the existing documentation in `docs/` before proposing major changes.
+
+---
+
+## � License
+
+This project is released under the terms of the [MIT License](LICENSE).
